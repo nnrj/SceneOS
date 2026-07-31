@@ -32,12 +32,26 @@ vector allocation, sharing, masking, deregistration, and concurrency.
 PIT channel 0 runs in rate-generator mode at approximately 100 Hz. The boot
 self-test enables interrupts and waits for three ticks. The wait loop also
 uses a two-billion-TSC-cycle startup watchdog so broken routing cannot leave
-QEMU permanently sleeping in `hlt`. The tick count is an observable early
-time base, not yet a nanosecond monotonic clock.
+QEMU waiting forever.
 
-The next step is to calibrate the TSC, evaluate invariant TSC, HPET, and the
-Local APIC timer, define a common monotonic unit, and build an early timer
-queue that does not depend on dynamic allocation.
+The core clock waits for a PIT tick boundary and calibrates TSC frequency over
+eight ticks. Nanosecond conversion divides into quotient and remainder instead
+of directly multiplying `elapsed * 1,000,000,000`, avoiding overflow. The
+clock origin is calibration completion, not boot or the Unix epoch.
+
+QEMU currently does not advertise invariant TSC, so this is only an early
+monotonic source. It does not yet promise accuracy across CPUs, sleep,
+migration, or frequency-state changes. Future work must use CPUID, HPET, and
+the Local APIC timer to select and cross-check clock sources.
+
+## Early timer queue
+
+The core layer uses a fixed 32-entry min-heap ordered by nanosecond deadline
+and increasing ID. It supports absolute/relative scheduling and cancellation.
+`scene_timer_run_due()` removes due entries and invokes callbacks in ordinary
+kernel context; IRQ0 only updates the tick counter and never runs arbitrary
+callbacks. The queue is currently BSP-serial, without locking or dynamic
+growth.
 
 ## Automated validation
 
@@ -47,6 +61,6 @@ python tools/scenectl.py smoke --page-fault
 ```
 
 The default test requires `Interrupt controller: Local APIC + IOAPIC`, the PIT
-GSI, the 100 Hz frequency, and at least three hardware ticks. The page-fault
-test also requires completed interrupt initialization, proving that exception
-and IRQ paths coexist.
+GSI, the 100 Hz frequency, at least three hardware ticks, TSC calibration, and
+timer ordering/cancellation verification. The page-fault test requires those
+steps too, proving that exception and IRQ/time paths coexist.

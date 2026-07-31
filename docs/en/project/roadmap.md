@@ -35,7 +35,10 @@ observable completion criteria.
   migration. (initial version complete)
 - PIT 100 Hz hardware ticks with an interrupt watchdog. (initial version
   complete)
-- Monotonic-time conversion, clock-source calibration, and timer queue.
+- PIT-assisted TSC calibration, nanosecond monotonic conversion, and a
+  fixed-capacity timer queue. (initial version complete)
+- Invariant TSC/HPET/Local APIC timer evaluation, clock-source selection, and
+  dynamic timer capacity.
 - PS/2 keyboard and mouse with a unified input event model.
 
 ## M3: threads, processes, and user space

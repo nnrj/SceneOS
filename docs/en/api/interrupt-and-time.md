@@ -29,3 +29,33 @@ configuration.
 no SMP synchronization guarantee and is not a stable wall clock, a
 timeout-safe source, or a user-space ABI. Drivers must not call
 `scene_timer_handle_tick()` directly; that entry belongs to the IRQ dispatcher.
+
+## Monotonic clock
+
+- `scene_clock_init(calibration_ticks)` calibrates the architecture counter
+  against PIT ticks.
+- `scene_clock_ready()` reports whether calibration completed.
+- `scene_clock_source_invariant()` reports whether the CPU advertises an
+  invariant TSC.
+- `scene_clock_source_frequency_hz()` returns the calibrated frequency.
+- `scene_clock_monotonic_ns()` returns nanoseconds from the calibration origin.
+
+The value is not a wall clock and contains no date or timezone. On a
+non-invariant TSC, it only promises non-decreasing values during the current
+BSP run, not long-term rate accuracy.
+
+## Timer queue
+
+- `scene_timer_schedule_at(deadline_ns, callback, context, id)` schedules an
+  absolute monotonic deadline.
+- `scene_timer_schedule_after(delay_ns, callback, context, id)` schedules a
+  relative delay.
+- `scene_timer_cancel(id)` removes an item that is still queued.
+- `scene_timer_run_due()` invokes all due callbacks in the caller's context
+  and returns their count.
+- `scene_timer_pending()` returns the number of waiting items.
+
+`SCENE_TIMER_QUEUE_CAPACITY` fixes capacity at 32. Equal deadlines are stably
+ordered by increasing timer ID. The queue is not concurrency-safe yet.
+Callbacks may schedule more items, but must not assume hardware-interrupt
+context.

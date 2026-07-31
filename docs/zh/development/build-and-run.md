@@ -84,5 +84,6 @@ GitHub Actions 会在临时 Linux runner 中安装工具、构建 ISO，并通�
 ## 验收
 
 QEMU 串口应输出 `SceneOS kernel bootstrap`、GDT/TSS/IDT、bootloader、内存
-映射、`Local APIC + IOAPIC`、PIT GSI、硬件 tick、首次物理页和 framebuffer
-信息。图形窗口应显示深蓝桌面、任务栏和一个验证窗口。
+映射、`Local APIC + IOAPIC`、PIT GSI、硬件 tick、TSC 校准、定时器队列、
+首次物理页和 framebuffer 信息。图形窗口应显示深蓝桌面、任务栏和一个验证
+窗口。

@@ -1,7 +1,9 @@
 set(SCENEOS_KERNEL_SOURCES
     src/main.c
     src/boot/limine_boot.c
+    src/core/clock.c
     src/core/log.c
+    src/core/timer_queue.c
     src/memory/heap.c
     src/memory/physical.c
     src/graphics/framebuffer.c

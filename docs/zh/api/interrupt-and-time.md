@@ -24,3 +24,28 @@
 `scene_timer_ticks()` 当前依赖 x86-64 对齐 64 位读写。它还没有 SMP 同步保证，
 不能作为稳定 wall clock、超时安全来源或用户态 ABI。驱动也不得直接调用
 `scene_timer_handle_tick()`，该入口只属于 IRQ 分派器。
+
+## 单调时钟
+
+- `scene_clock_init(calibration_ticks)`：用 PIT tick 校准架构计数器。
+- `scene_clock_ready()`：报告校准是否完成。
+- `scene_clock_source_invariant()`：报告 CPU 是否声明 invariant TSC。
+- `scene_clock_source_frequency_hz()`：返回校准频率。
+- `scene_clock_monotonic_ns()`：返回从校准原点开始的纳秒数。
+
+返回值不代表 wall clock，也不含时区或日期。非 invariant TSC 上只保证当前
+BSP 运行期间读数不倒退，不保证长期速率准确。
+
+## 定时器队列
+
+- `scene_timer_schedule_at(deadline_ns, callback, context, id)`：按绝对单调
+  deadline 调度。
+- `scene_timer_schedule_after(delay_ns, callback, context, id)`：按相对延迟
+  调度。
+- `scene_timer_cancel(id)`：取消仍在队列中的项目。
+- `scene_timer_run_due()`：在调用方上下文运行所有已到期回调并返回数量。
+- `scene_timer_pending()`：返回等待项目数。
+
+容量由 `SCENE_TIMER_QUEUE_CAPACITY` 固定为 32。相同 deadline 按递增 timer ID
+稳定排序。队列尚不支持并发调用；回调允许继续调度项目，但不得假定自己运行
+在硬件中断上下文。

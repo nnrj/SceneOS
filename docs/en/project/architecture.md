@@ -77,5 +77,9 @@ page-table reclamation, returning unused heap-tail pages, concurrent allocation,
 slab/object caches, and per-thread TSS RSP0 updates are not implemented yet.
 M2 now performs 8259A-compatible initialization, discovers the Local APIC,
 IOAPIC, and IRQ overrides from ACPI MADT, and routes the 100 Hz PIT IRQ to the
-BSP Local APIC on the default Q35 path. Monotonic-time conversion, clock-source
-selection, timer queues, and general driver IRQ registration remain pending.
+BSP Local APIC on the default Q35 path. The core time layer calibrates the TSC
+against PIT ticks and exposes nanosecond monotonic time. A fixed 32-entry
+min-heap timer queue supports scheduling, cancellation, and due-callback
+dispatch outside IRQ context. Final clock-source selection, a fallback for
+non-invariant TSC, dynamic queue capacity, and general driver IRQ registration
+remain pending.

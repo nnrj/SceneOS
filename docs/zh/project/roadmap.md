@@ -26,7 +26,8 @@
 
 - PIC 兼容启动、ACPI MADT 探测与 Local APIC/IOAPIC 迁移。（已完成初版）
 - PIT 100 Hz 硬件 tick 与中断 watchdog。（已完成初版）
-- 单调时间换算、时钟源校准与定时器队列。
+- PIT 辅助 TSC 校准、纳秒单调时间换算与固定容量定时器队列。（已完成初版）
+- invariant TSC/HPET/Local APIC timer 评估、时钟源选择与动态定时器容量。
 - PS/2 键盘鼠标与统一输入事件。
 
 ## M3：线程、进程与用户态
