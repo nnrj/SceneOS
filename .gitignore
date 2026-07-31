@@ -1,0 +1,9 @@
+/build/
+/.scene-sdk/
+/.vscode/settings.json
+/compile_commands.json
+*.iso
+*.hdd
+*.log
+__pycache__/
+*.py[cod]

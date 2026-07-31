@@ -1,0 +1,60 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  x86_64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install ephemeral host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            clang lld cmake ninja-build nasm xorriso qemu-system-x86 ovmf make
+
+      - name: Fetch pinned project-local boot dependency
+        run: python3 tools/scenectl.py bootstrap --yes
+
+      - name: Validate exception dispatch
+        run: python3 tools/scenectl.py smoke --exception --timeout 8
+
+      - name: Validate page-fault diagnostics
+        run: python3 tools/scenectl.py smoke --page-fault --timeout 8
+
+      - name: Build bootable image
+        run: python3 tools/scenectl.py image
+
+      - name: Run serial smoke test
+        run: |
+          set +e
+          timeout 15s qemu-system-x86_64 \
+            -machine q35 \
+            -m 256M \
+            -display none \
+            -no-reboot \
+            -no-shutdown \
+            -serial file:build/dev/serial.log \
+            -cdrom build/dev/sceneos.iso \
+            -boot d
+          set -e
+          grep -F "SceneOS kernel bootstrap" build/dev/serial.log
+          grep -F "Bootstrap complete" build/dev/serial.log
+
+      - name: Upload image and serial log
+        uses: actions/upload-artifact@v4
+        with:
+          name: sceneos-x86_64
+          path: |
+            build/dev/sceneos.iso
+            build/dev/serial.log

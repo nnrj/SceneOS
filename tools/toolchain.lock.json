@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "limine_protocol": {
+    "repository": "https://github.com/Limine-Bootloader/limine-protocol",
+    "commit": "630686a3dd3ce40f9e510a7dd9fea6b4c60d952e",
+    "header_sha256": "4de542d1c232b230ca4af04c5b89a78f51c9bdacb928a94ac44fc88377208a63"
+  },
+  "limine_binary": {
+    "version": "12.3.2",
+    "url": "https://github.com/Limine-Bootloader/Limine/releases/download/v12.3.2/limine-binary.zip",
+    "size": 1800064,
+    "sha256": "381c55e475a5b6f88afa73bb683fe985fb0d2c4252bfcf02420932c4a112fc8d"
+  }
+}
+
