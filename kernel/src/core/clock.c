@@ -1,4 +1,5 @@
 #include <scene/arch.h>
+#include <scene/boot.h>
 #include <scene/clock.h>
 #include <scene/timer.h>
 
@@ -11,9 +12,35 @@
 
 static uint64_t counter_origin;
 static uint64_t counter_frequency_hz;
+static bool using_hpet;
 static bool clock_ready;
 
-bool scene_clock_init(uint64_t calibration_ticks) {
+static uint64_t read_counter(void) {
+    return using_hpet
+        ? scene_arch_hpet_counter()
+        : scene_arch_timestamp_counter();
+}
+
+bool scene_clock_init(
+    const struct scene_boot_info *boot_info,
+    uint64_t calibration_ticks
+) {
+#if !defined(SCENEOS_FORCE_TSC_CLOCK)
+    if (scene_arch_hpet_init(boot_info)) {
+        const uint64_t frequency = scene_arch_hpet_frequency_hz();
+        if (frequency != 0 &&
+            frequency <= SCENE_MAXIMUM_TSC_HZ) {
+            using_hpet = true;
+            counter_frequency_hz = frequency;
+            counter_origin = scene_arch_hpet_counter();
+            clock_ready = true;
+            return true;
+        }
+    }
+#else
+    (void)boot_info;
+#endif
+
     const uint64_t timer_frequency = scene_timer_frequency();
     if (calibration_ticks < 2U || timer_frequency == 0 ||
         calibration_ticks > UINT64_C(1000) ||
@@ -43,6 +70,7 @@ bool scene_clock_init(uint64_t calibration_ticks) {
 
     counter_origin = final_counter;
     counter_frequency_hz = frequency;
+    using_hpet = false;
     clock_ready = true;
     return true;
 }
@@ -51,8 +79,12 @@ bool scene_clock_ready(void) {
     return clock_ready;
 }
 
-bool scene_clock_source_invariant(void) {
-    return scene_arch_timestamp_counter_invariant();
+const char *scene_clock_source_name(void) {
+    return using_hpet ? "HPET" : "calibrated TSC";
+}
+
+bool scene_clock_source_stable(void) {
+    return using_hpet || scene_arch_timestamp_counter_invariant();
 }
 
 uint64_t scene_clock_source_frequency_hz(void) {
@@ -65,7 +97,7 @@ uint64_t scene_clock_monotonic_ns(void) {
     }
 
     const uint64_t elapsed =
-        scene_arch_timestamp_counter() - counter_origin;
+        read_counter() - counter_origin;
     const uint64_t seconds = elapsed / counter_frequency_hz;
     const uint64_t remainder = elapsed % counter_frequency_hz;
     if (seconds > UINT64_MAX / SCENE_NANOSECONDS_PER_SECOND) {

@@ -136,16 +136,16 @@ void kmain(void) {
         scene_panic("Hardware timer interrupt watchdog expired");
     }
     scene_log_u64("Hardware timer ticks observed: ", scene_timer_ticks());
-    if (!scene_clock_init(8U)) {
-        scene_panic("TSC clock calibration failed");
+    if (!scene_clock_init(&boot_info, 8U)) {
+        scene_panic("Monotonic clock initialization failed");
     }
-    scene_log_line(
-        scene_clock_source_invariant()
-            ? "Invariant TSC: yes"
-            : "Invariant TSC: no"
-    );
+    scene_log_write("Clock source: ");
+    scene_log_line(scene_clock_source_name());
+    scene_log_line(scene_clock_source_stable()
+        ? "Clock source stable: yes"
+        : "Clock source stable: no");
     scene_log_u64(
-        "Calibrated TSC frequency Hz: ",
+        "Clock source frequency Hz: ",
         scene_clock_source_frequency_hz()
     );
 
@@ -156,19 +156,19 @@ void kmain(void) {
     scene_timer_id cancelled_timer;
     const uint64_t monotonic_before = scene_clock_monotonic_ns();
     if (!scene_timer_schedule_after(
-            UINT64_C(20000000),
+            UINT64_C(10000000),
             record_timer_callback,
             (void *)&timer_marker_second,
             &later_timer
         ) ||
         !scene_timer_schedule_after(
-            UINT64_C(10000000),
+            UINT64_C(5000000),
             record_timer_callback,
             (void *)&timer_marker_first,
             &earlier_timer
         ) ||
         !scene_timer_schedule_after(
-            UINT64_C(15000000),
+            UINT64_C(7500000),
             record_timer_callback,
             (void *)&timer_marker_cancelled,
             &cancelled_timer
@@ -179,8 +179,17 @@ void kmain(void) {
         scene_panic("Timer queue setup or wait failed");
     }
     const uint64_t monotonic_after = scene_clock_monotonic_ns();
-    if (scene_timer_run_due() != 2U ||
-        scene_timer_pending() != 0U ||
+    const size_t timer_callbacks_run = scene_timer_run_due();
+    scene_log_u64("Timer callbacks run: ", timer_callbacks_run);
+    scene_log_u64("Timer callbacks recorded: ", timer_callback_count);
+    scene_log_u64("Timer callback result 0: ", timer_callback_results[0]);
+    scene_log_u64("Timer callback result 1: ", timer_callback_results[1]);
+    scene_log_u64("Timer queue pending events: ", scene_timer_pending());
+    scene_log_u64(
+        "Monotonic clock advance ns: ",
+        monotonic_after - monotonic_before
+    );
+    if (timer_callbacks_run != 2U || scene_timer_pending() != 0U ||
         timer_callback_count != 2U ||
         timer_callback_results[0] != timer_marker_first ||
         timer_callback_results[1] != timer_marker_second ||
@@ -189,12 +198,7 @@ void kmain(void) {
     }
     (void)later_timer;
     (void)earlier_timer;
-    scene_log_u64(
-        "Monotonic clock advance ns: ",
-        monotonic_after - monotonic_before
-    );
     scene_log_line("Timer queue ordering/cancellation: verified");
-    scene_log_u64("Timer queue pending events: ", scene_timer_pending());
 
     const uint64_t scratch_virtual_address =
         UINT64_C(0xffffb00000000000);

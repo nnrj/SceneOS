@@ -315,12 +315,16 @@ def command_configure(arguments: argparse.Namespace) -> None:
     page_fault_test = (
         "ON" if getattr(arguments, "page_fault", False) else "OFF"
     )
+    force_tsc_clock = (
+        "ON" if getattr(arguments, "tsc_clock", False) else "OFF"
+    )
     run(
         [
             cmake,
             "--preset", arguments.preset,
             f"-DSCENEOS_EXCEPTION_SELF_TEST={self_test}",
             f"-DSCENEOS_PAGE_FAULT_SELF_TEST={page_fault_test}",
+            f"-DSCENEOS_FORCE_TSC_CLOCK={force_tsc_clock}",
         ],
         environment=environment,
     )
@@ -578,6 +582,9 @@ def command_smoke(arguments: argparse.Namespace) -> None:
     if not serial_log.is_file():
         raise SceneCtlError("QEMU did not create a serial log")
     output = serial_log.read_text(encoding="utf-8", errors="replace")
+    clock_source = (
+        "calibrated TSC" if arguments.tsc_clock else "HPET"
+    )
     if arguments.exception:
         expected = (
             "SceneOS kernel bootstrap",
@@ -592,7 +599,8 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "SceneOS kernel bootstrap",
             "Interrupt controller: Local APIC + IOAPIC",
             "Hardware timer ticks observed:",
-            "Calibrated TSC frequency Hz:",
+            f"Clock source: {clock_source}",
+            "Clock source frequency Hz:",
             "Timer queue ordering/cancellation: verified",
             "Kernel heap virtual address:",
             "Triggering page-fault self-test",
@@ -617,7 +625,8 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "PIT interrupt GSI:",
             "PIT timer frequency: 100",
             "Hardware timer ticks observed:",
-            "Calibrated TSC frequency Hz:",
+            f"Clock source: {clock_source}",
+            "Clock source frequency Hz:",
             "Monotonic clock advance ns:",
             "Timer queue ordering/cancellation: verified",
             "Timer queue pending events: 0",
@@ -713,6 +722,11 @@ def parser() -> argparse.ArgumentParser:
         "--page-fault",
         action="store_true",
         help="write an unmapped address and validate page-fault diagnostics",
+    )
+    smoke.add_argument(
+        "--tsc-clock",
+        action="store_true",
+        help="disable HPET and validate the calibrated-TSC fallback",
     )
     smoke.set_defaults(handler=command_smoke)
 

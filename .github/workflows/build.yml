@@ -29,6 +29,9 @@ jobs:
       - name: Validate exception dispatch
         run: python3 tools/scenectl.py smoke --exception --timeout 8
 
+      - name: Validate calibrated-TSC clock fallback
+        run: python3 tools/scenectl.py smoke --tsc-clock --timeout 8
+
       - name: Validate page-fault diagnostics
         run: python3 tools/scenectl.py smoke --page-fault --timeout 8
 

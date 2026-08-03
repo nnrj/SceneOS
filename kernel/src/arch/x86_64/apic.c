@@ -1,3 +1,5 @@
+#include "acpi.h"
+
 #include <scene/boot.h>
 #include <scene/paging.h>
 
@@ -29,32 +31,8 @@
 #define SCENE_ACPI_MADT_INTERRUPT_OVERRIDE 2U
 #define SCENE_ACPI_MADT_LOCAL_APIC_OVERRIDE 5U
 
-struct __attribute__((packed)) acpi_rsdp {
-    char signature[8];
-    uint8_t checksum;
-    char oem_id[6];
-    uint8_t revision;
-    uint32_t rsdt_address;
-    uint32_t length;
-    uint64_t xsdt_address;
-    uint8_t extended_checksum;
-    uint8_t reserved[3];
-};
-
-struct __attribute__((packed)) acpi_sdt_header {
-    char signature[4];
-    uint32_t length;
-    uint8_t revision;
-    uint8_t checksum;
-    char oem_id[6];
-    char oem_table_id[8];
-    uint32_t oem_revision;
-    uint32_t creator_id;
-    uint32_t creator_revision;
-};
-
 struct __attribute__((packed)) acpi_madt {
-    struct acpi_sdt_header header;
+    struct scene_acpi_sdt_header header;
     uint32_t local_apic_address;
     uint32_t flags;
     uint8_t entries[];
@@ -103,116 +81,17 @@ static uint32_t io_apic_global_base;
 static uint16_t timer_override_flags;
 static bool apic_ready;
 
-static bool bytes_equal(
-    const char *left,
-    const char *right,
-    size_t count
-) {
-    for (size_t index = 0; index < count; ++index) {
-        if (left[index] != right[index]) {
-            return false;
-        }
-    }
-    return true;
-}
-
-static bool checksum_valid(const void *address, size_t length) {
-    const uint8_t *bytes = address;
-    uint8_t sum = 0;
-    for (size_t index = 0; index < length; ++index) {
-        sum = (uint8_t)(sum + bytes[index]);
-    }
-    return sum == 0;
-}
-
-static const void *physical_pointer(
-    uint64_t physical_address,
-    uint64_t hhdm_offset
-) {
-    if (physical_address > UINT64_MAX - hhdm_offset) {
-        return 0;
-    }
-    return (const void *)(uintptr_t)(physical_address + hhdm_offset);
-}
-
-static const struct acpi_sdt_header *find_madt(
-    const struct acpi_rsdp *rsdp,
-    uint64_t hhdm_offset
-) {
-    const bool use_xsdt = rsdp->revision >= 2U &&
-        rsdp->length >= sizeof(*rsdp) &&
-        rsdp->xsdt_address != 0;
-    const uint64_t root_address = use_xsdt
-        ? rsdp->xsdt_address
-        : rsdp->rsdt_address;
-    const struct acpi_sdt_header *root =
-        physical_pointer(root_address, hhdm_offset);
-    if (root == 0 ||
-        root->length < sizeof(*root) ||
-        !bytes_equal(
-            root->signature,
-            use_xsdt ? "XSDT" : "RSDT",
-            4U
-        ) ||
-        !checksum_valid(root, root->length)) {
-        return 0;
-    }
-
-    const size_t entry_size = use_xsdt
-        ? sizeof(uint64_t)
-        : sizeof(uint32_t);
-    const size_t entry_count =
-        (root->length - sizeof(*root)) / entry_size;
-    const uint8_t *entries =
-        (const uint8_t *)root + sizeof(*root);
-    for (size_t index = 0; index < entry_count; ++index) {
-        uint64_t address;
-        if (use_xsdt) {
-            const uint64_t *entry =
-                (const uint64_t *)(const void *)(
-                    entries + index * entry_size
-                );
-            address = *entry;
-        } else {
-            const uint32_t *entry =
-                (const uint32_t *)(const void *)(
-                    entries + index * entry_size
-                );
-            address = *entry;
-        }
-        const struct acpi_sdt_header *table =
-            physical_pointer(address, hhdm_offset);
-        if (table != 0 &&
-            table->length >= sizeof(*table) &&
-            bytes_equal(table->signature, "APIC", 4U) &&
-            checksum_valid(table, table->length)) {
-            return table;
-        }
-    }
-    return 0;
-}
-
 static bool discover_apics(
     const struct scene_boot_info *boot_info,
     struct apic_discovery *discovery
 ) {
-    if (boot_info == 0 || boot_info->rsdp == 0 ||
-        boot_info->hhdm_offset == 0 || discovery == 0) {
+    if (boot_info == 0 || discovery == 0) {
         return false;
     }
-    const struct acpi_rsdp *rsdp = boot_info->rsdp;
-    if (!bytes_equal(rsdp->signature, "RSD PTR ", 8U) ||
-        !checksum_valid(rsdp, 20U) ||
-        (rsdp->revision >= 2U &&
-            (rsdp->length < sizeof(*rsdp) ||
-                !checksum_valid(rsdp, rsdp->length)))) {
-        return false;
-    }
-
     const struct acpi_madt *madt =
-        (const struct acpi_madt *)(const void *)find_madt(
-            rsdp,
-            boot_info->hhdm_offset
+        (const struct acpi_madt *)(const void *)scene_acpi_find_table(
+            boot_info,
+            "APIC"
         );
     if (madt == 0 || madt->header.length < sizeof(*madt)) {
         return false;

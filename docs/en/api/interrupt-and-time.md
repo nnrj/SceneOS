@@ -32,17 +32,19 @@ timeout-safe source, or a user-space ABI. Drivers must not call
 
 ## Monotonic clock
 
-- `scene_clock_init(calibration_ticks)` calibrates the architecture counter
-  against PIT ticks.
+- `scene_clock_init(boot_info, calibration_ticks)` prefers ACPI HPET and
+  calibrates the TSC against PIT ticks when HPET is unavailable.
 - `scene_clock_ready()` reports whether calibration completed.
-- `scene_clock_source_invariant()` reports whether the CPU advertises an
-  invariant TSC.
-- `scene_clock_source_frequency_hz()` returns the calibrated frequency.
+- `scene_clock_source_name()` returns `HPET` or `calibrated TSC`.
+- `scene_clock_source_stable()` returns `true` for HPET and follows the CPU's
+  invariant-TSC declaration for the fallback.
+- `scene_clock_source_frequency_hz()` returns the active source frequency.
 - `scene_clock_monotonic_ns()` returns nanoseconds from the calibration origin.
 
-The value is not a wall clock and contains no date or timezone. On a
-non-invariant TSC, it only promises non-decreasing values during the current
-BSP run, not long-term rate accuracy.
+The value is not a wall clock and contains no date or timezone. Only a 64-bit
+HPET main counter is currently accepted. On a non-invariant TSC, the value only
+promises non-decreasing readings during the current BSP run, not long-term
+rate accuracy.
 
 ## Timer queue
 

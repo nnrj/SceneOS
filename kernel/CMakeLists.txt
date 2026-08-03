@@ -9,7 +9,9 @@ set(SCENEOS_KERNEL_SOURCES
     src/graphics/framebuffer.c
     src/arch/x86_64/descriptors.c
     src/arch/x86_64/exceptions.c
+    src/arch/x86_64/acpi.c
     src/arch/x86_64/apic.c
+    src/arch/x86_64/hpet.c
     src/arch/x86_64/interrupts.c
     src/arch/x86_64/paging.c
     src/arch/x86_64/serial.c
@@ -42,6 +44,12 @@ endif()
 if(SCENEOS_PAGE_FAULT_SELF_TEST)
     target_compile_definitions(scene-kernel PRIVATE
         SCENEOS_PAGE_FAULT_SELF_TEST=1
+    )
+endif()
+
+if(SCENEOS_FORCE_TSC_CLOCK)
+    target_compile_definitions(scene-kernel PRIVATE
+        SCENEOS_FORCE_TSC_CLOCK=1
     )
 endif()
 

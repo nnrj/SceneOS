@@ -27,14 +27,17 @@
 
 ## 单调时钟
 
-- `scene_clock_init(calibration_ticks)`：用 PIT tick 校准架构计数器。
+- `scene_clock_init(boot_info, calibration_ticks)`：优先初始化 ACPI HPET；不可用
+  时用 PIT tick 校准 TSC。
 - `scene_clock_ready()`：报告校准是否完成。
-- `scene_clock_source_invariant()`：报告 CPU 是否声明 invariant TSC。
-- `scene_clock_source_frequency_hz()`：返回校准频率。
+- `scene_clock_source_name()`：返回 `HPET` 或 `calibrated TSC`。
+- `scene_clock_source_stable()`：HPET 返回 `true`；TSC 取决于 CPU 是否声明
+  invariant TSC。
+- `scene_clock_source_frequency_hz()`：返回当前来源频率。
 - `scene_clock_monotonic_ns()`：返回从校准原点开始的纳秒数。
 
-返回值不代表 wall clock，也不含时区或日期。非 invariant TSC 上只保证当前
-BSP 运行期间读数不倒退，不保证长期速率准确。
+返回值不代表 wall clock，也不含时区或日期。当前只接受 64 位 HPET 主计数器；
+非 invariant TSC 上只保证当前 BSP 运行期间读数不倒退，不保证长期速率准确。
 
 ## 定时器队列
 

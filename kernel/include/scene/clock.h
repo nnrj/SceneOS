@@ -4,9 +4,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-bool scene_clock_init(uint64_t calibration_ticks);
+struct scene_boot_info;
+
+bool scene_clock_init(
+    const struct scene_boot_info *boot_info,
+    uint64_t calibration_ticks
+);
 bool scene_clock_ready(void);
-bool scene_clock_source_invariant(void);
+const char *scene_clock_source_name(void);
+bool scene_clock_source_stable(void);
 uint64_t scene_clock_source_frequency_hz(void);
 uint64_t scene_clock_monotonic_ns(void);
 

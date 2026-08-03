@@ -71,7 +71,8 @@ M1 已安装 SceneOS 自有 x86-64 GDT、TSS 和异常 IDT。双重故障、NMI�
 合并、释放与复用。中间页表回收、堆尾物理页归还、并发分配、slab/对象缓存、
 按线程更新 TSS RSP0 尚未实现。M2 已建立 8259A 兼容初始化，并从 ACPI MADT
 发现 Local APIC、IOAPIC 和 IRQ 覆盖关系；默认 Q35 路径把 100 Hz PIT IRQ
-路由到 BSP Local APIC。核心时间层以 PIT tick 校准 TSC，提供纳秒单调时间；
-固定 32 项的小顶堆定时器队列支持调度、取消和在非 IRQ 上下文分派到期回调。
-最终时钟源选择、非 invariant TSC 替代方案、动态队列容量和通用驱动 IRQ 注册
-仍待实现。
+路由到 BSP Local APIC。共享 ACPI 查询层校验 RSDP、XSDT/RSDT 和目标表；核心
+时间层优先使用 64 位 HPET 主计数器，缺失时以 PIT tick 校准 TSC，并统一提供
+纳秒单调时间。固定 32 项的小顶堆定时器队列支持调度、取消和在非 IRQ 上下文
+分派到期回调。跨 CPU 时钟同步、Local APIC timer、动态队列容量和通用驱动
+IRQ 注册仍待实现。
