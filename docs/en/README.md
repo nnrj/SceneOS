@@ -15,7 +15,7 @@
 - [Coding and interface guidelines](development/coding-guidelines.md)
 - [Early exceptions and physical memory](development/early-exceptions-and-memory.md)
 - [Hardware interrupts and early time base](development/interrupts-and-time.md)
-- [Input core and PS/2 keyboard](development/input-and-ps2.md)
+- [Input core and PS/2 devices](development/input-and-ps2.md)
 
 ## API documentation
 

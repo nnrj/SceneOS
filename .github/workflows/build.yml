@@ -38,6 +38,9 @@ jobs:
       - name: Validate PS/2 keyboard input
         run: python3 tools/scenectl.py smoke --keyboard --timeout 10
 
+      - name: Validate PS/2 mouse input
+        run: python3 tools/scenectl.py smoke --mouse --timeout 10
+
       - name: Build bootable image
         run: python3 tools/scenectl.py image
 

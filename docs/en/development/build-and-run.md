@@ -92,3 +92,9 @@ Run `python tools/scenectl.py smoke --keyboard --timeout 10` for the automated
 input acceptance test. The runner waits for the kernel, sends `A` through the
 QEMU monitor, and requires an IRQ1-delivered semantic key event with no queue
 loss. This mode is headless and does not type into the host desktop.
+
+Run `python tools/scenectl.py smoke --mouse --timeout 10` for the matching
+pointer test. It sends relative motion through QEMU Monitor and requires an
+IRQ12-delivered pointer event. Neither input self-test changes the normal
+interactive build configuration permanently; the next configure selects the
+requested options explicitly.

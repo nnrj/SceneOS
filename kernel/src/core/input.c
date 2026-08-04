@@ -10,6 +10,21 @@ static volatile size_t write_index;
 static uint64_t next_sequence;
 static volatile uint64_t dropped_events;
 
+static bool push_event(const struct scene_input_event *event) {
+    const size_t current_write = write_index;
+    const size_t next_write =
+        (current_write + 1U) % SCENE_INPUT_QUEUE_CAPACITY;
+    if (next_write == read_index) {
+        ++dropped_events;
+        return false;
+    }
+    event_queue[current_write] = *event;
+    event_queue[current_write].sequence = next_sequence;
+    ++next_sequence;
+    write_index = next_write;
+    return true;
+}
+
 void scene_input_init(void) {
     read_index = 0;
     write_index = 0;
@@ -22,21 +37,26 @@ bool scene_input_push_key(const struct scene_key_event *event) {
         event->code >= SCENE_KEY_COUNT) {
         return false;
     }
-    const size_t current_write = write_index;
-    const size_t next_write =
-        (current_write + 1U) % SCENE_INPUT_QUEUE_CAPACITY;
-    if (next_write == read_index) {
-        ++dropped_events;
-        return false;
-    }
-    event_queue[current_write] = (struct scene_input_event){
-        .sequence = next_sequence,
+    const struct scene_input_event input_event = {
+        .sequence = 0,
         .type = SCENE_INPUT_EVENT_KEY,
         .key = *event
     };
-    ++next_sequence;
-    write_index = next_write;
-    return true;
+    return push_event(&input_event);
+}
+
+bool scene_input_push_pointer(const struct scene_pointer_event *event) {
+    if (event == 0 ||
+        (event->delta_x == 0 && event->delta_y == 0 &&
+        event->wheel_delta == 0 && event->changed_buttons == 0)) {
+        return false;
+    }
+    const struct scene_input_event input_event = {
+        .sequence = 0,
+        .type = SCENE_INPUT_EVENT_POINTER,
+        .pointer = *event
+    };
+    return push_event(&input_event);
 }
 
 bool scene_input_pop(struct scene_input_event *event) {

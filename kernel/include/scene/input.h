@@ -8,7 +8,14 @@
 #define SCENE_INPUT_QUEUE_CAPACITY 64U
 
 enum scene_input_event_type {
-    SCENE_INPUT_EVENT_KEY = 1
+    SCENE_INPUT_EVENT_KEY = 1,
+    SCENE_INPUT_EVENT_POINTER
+};
+
+enum scene_pointer_buttons {
+    SCENE_POINTER_BUTTON_LEFT = 1U << 0,
+    SCENE_POINTER_BUTTON_RIGHT = 1U << 1,
+    SCENE_POINTER_BUTTON_MIDDLE = 1U << 2
 };
 
 enum scene_key_code {
@@ -111,14 +118,26 @@ struct scene_key_event {
     bool repeat;
 };
 
+struct scene_pointer_event {
+    int32_t delta_x;
+    int32_t delta_y;
+    int32_t wheel_delta;
+    uint8_t buttons;
+    uint8_t changed_buttons;
+};
+
 struct scene_input_event {
     uint64_t sequence;
     enum scene_input_event_type type;
-    struct scene_key_event key;
+    union {
+        struct scene_key_event key;
+        struct scene_pointer_event pointer;
+    };
 };
 
 void scene_input_init(void);
 bool scene_input_push_key(const struct scene_key_event *event);
+bool scene_input_push_pointer(const struct scene_pointer_event *event);
 bool scene_input_pop(struct scene_input_event *event);
 size_t scene_input_pending(void);
 uint64_t scene_input_dropped(void);

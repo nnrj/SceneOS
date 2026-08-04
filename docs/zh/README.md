@@ -15,7 +15,7 @@
 - [编码与接口约定](development/coding-guidelines.md)
 - [早期异常与物理内存](development/early-exceptions-and-memory.md)
 - [硬件中断与早期时间基准](development/interrupts-and-time.md)
-- [输入核心与 PS/2 键盘](development/input-and-ps2.md)
+- [输入核心与 PS/2 设备](development/input-and-ps2.md)
 
 ## API 文档
 

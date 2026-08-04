@@ -91,3 +91,7 @@ QEMU 串口应输出 `SceneOS kernel bootstrap`、GDT/TSS/IDT、bootloader、内
 使用 `python tools/scenectl.py smoke --keyboard --timeout 10` 执行输入自动验收。
 脚本等待内核进入测试点，通过 QEMU monitor 发送 `A`，并要求 IRQ1 交付语义
 按键事件且队列无丢失。该测试为 headless，不会向宿主桌面输入字符。
+
+对应的指针验收命令是 `python tools/scenectl.py smoke --mouse --timeout 10`。
+它通过 QEMU Monitor 发送相对移动，并要求 IRQ12 交付指针事件。两种输入自测都
+不会永久改变普通交互构建；下一次 configure 会显式选择本次所需选项。

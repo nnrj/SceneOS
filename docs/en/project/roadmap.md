@@ -42,9 +42,12 @@ observable completion criteria.
   driver migration. (initial version complete)
 - PS/2 Set 1 keyboard input and a unified semantic key-event queue. (initial
   version complete)
+- PS/2 three-byte mouse packets and relative pointer events. (initial version
+  complete)
 - CPUID/TSC frequency cross-checking, Local APIC timer evaluation, and dynamic
   timer capacity.
-- PS/2 mouse, keyboard layout/text translation, and dynamic input capacity.
+- Keyboard layout/text translation, wheel negotiation, and dynamic input
+  capacity.
 
 ## M3: threads, processes, and user space
 

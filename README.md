@@ -13,7 +13,8 @@ higher-half kernel heap, discovers APIC topology through ACPI MADT, routes a
 PIT hardware timer through Local APIC/IOAPIC, selects an HPET monotonic clock
 with a calibrated-TSC fallback, dispatches hardware lines through a fixed IRQ
 registry, provides fixed-capacity timer and input queues, decodes a PS/2
-keyboard through IRQ1, and draws a simple framebuffer scene.
+keyboard through IRQ1 and a PS/2 mouse through IRQ12, and draws a simple
+framebuffer scene.
 
 ## Quick start
 

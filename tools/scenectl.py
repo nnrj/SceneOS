@@ -319,6 +319,7 @@ def command_configure(arguments: argparse.Namespace) -> None:
     keyboard_test = (
         "ON" if getattr(arguments, "keyboard", False) else "OFF"
     )
+    mouse_test = "ON" if getattr(arguments, "mouse", False) else "OFF"
     force_tsc_clock = (
         "ON" if getattr(arguments, "tsc_clock", False) else "OFF"
     )
@@ -329,6 +330,7 @@ def command_configure(arguments: argparse.Namespace) -> None:
             f"-DSCENEOS_EXCEPTION_SELF_TEST={self_test}",
             f"-DSCENEOS_PAGE_FAULT_SELF_TEST={page_fault_test}",
             f"-DSCENEOS_KEYBOARD_SELF_TEST={keyboard_test}",
+            f"-DSCENEOS_MOUSE_SELF_TEST={mouse_test}",
             f"-DSCENEOS_FORCE_TSC_CLOCK={force_tsc_clock}",
         ],
         environment=environment,
@@ -573,10 +575,11 @@ def command_smoke(arguments: argparse.Namespace) -> None:
         "-no-shutdown",
         "-drive", f"format=raw,file=fat:rw:{image_root.as_posix()}",
     ]
-    if arguments.keyboard:
+    interactive_input_test = arguments.keyboard or arguments.mouse
+    if interactive_input_test:
         command.extend(["-monitor", "stdio"])
     print("+", " ".join(command))
-    if arguments.keyboard:
+    if interactive_input_test:
         process = subprocess.Popen(
             command,
             cwd=ROOT,
@@ -586,7 +589,11 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             text=True,
         )
         deadline = time.monotonic() + arguments.timeout
-        marker = "Waiting for injected PS/2 key A"
+        marker = (
+            "Waiting for injected PS/2 key A"
+            if arguments.keyboard
+            else "Waiting for injected PS/2 mouse motion"
+        )
         while process.poll() is None and time.monotonic() < deadline:
             if serial_log.is_file():
                 current = serial_log.read_text(
@@ -597,7 +604,12 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             time.sleep(0.05)
         if process.poll() is None and process.stdin is not None:
             try:
-                process.stdin.write("sendkey a\n")
+                monitor_command = (
+                    "sendkey a\n"
+                    if arguments.keyboard
+                    else "mouse_move 12 7\n"
+                )
+                process.stdin.write(monitor_command)
                 process.stdin.flush()
             except (BrokenPipeError, OSError):
                 pass
@@ -661,7 +673,8 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "Interrupt controller: Local APIC + IOAPIC",
             "IRQ registration lifecycle: verified",
             "PS/2 keyboard: ready",
-            "Registered IRQ handlers after input: 2",
+            "PS/2 mouse: ready",
+            "Registered IRQ handlers after input: 3",
             "Hardware timer ticks observed:",
             f"Clock source: {clock_source}",
             "Waiting for injected PS/2 key A",
@@ -669,6 +682,24 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "Injected key code: 30",
             "PS/2 scancodes received:",
             "PS/2 key A press: verified",
+            "Bootstrap complete",
+        )
+    elif arguments.mouse:
+        expected = (
+            "SceneOS kernel bootstrap",
+            "Interrupt controller: Local APIC + IOAPIC",
+            "IRQ registration lifecycle: verified",
+            "PS/2 keyboard: ready",
+            "PS/2 mouse: ready",
+            "Registered IRQ handlers after input: 3",
+            "Hardware timer ticks observed:",
+            f"Clock source: {clock_source}",
+            "Waiting for injected PS/2 mouse motion",
+            "Injected pointer sequence:",
+            "Injected pointer delta X:",
+            "Injected pointer delta Y:",
+            "PS/2 mouse packets received:",
+            "PS/2 mouse motion: verified",
             "Bootstrap complete",
         )
     else:
@@ -686,7 +717,8 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "IRQ registration lifecycle: verified",
             "Registered IRQ handlers: 1",
             "PS/2 keyboard: ready",
-            "Registered IRQ handlers after input: 2",
+            "PS/2 mouse: ready",
+            "Registered IRQ handlers after input: 3",
             "PIT timer frequency: 100",
             "Hardware timer ticks observed:",
             f"Clock source: {clock_source}",
@@ -791,6 +823,11 @@ def parser() -> argparse.ArgumentParser:
         "--keyboard",
         action="store_true",
         help="inject a key through QEMU and validate PS/2 input delivery",
+    )
+    fault_tests.add_argument(
+        "--mouse",
+        action="store_true",
+        help="inject motion through QEMU and validate PS/2 pointer delivery",
     )
     smoke.add_argument(
         "--tsc-clock",

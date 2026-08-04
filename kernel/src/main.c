@@ -11,7 +11,9 @@
 #include <scene/log.h>
 #include <scene/paging.h>
 #include <scene/physical.h>
+#include <scene/ps2_controller.h>
 #include <scene/ps2_keyboard.h>
+#include <scene/ps2_mouse.h>
 #include <scene/timer.h>
 #include <scene/timer_queue.h>
 
@@ -59,6 +61,39 @@ static bool wait_for_keyboard_test(void) {
                     "Input events dropped: ",
                     scene_input_dropped()
                 );
+                return scene_input_dropped() == 0;
+            }
+        }
+        __asm__ volatile ("pause" : : : "memory");
+    }
+    return false;
+}
+#endif
+
+#if defined(SCENEOS_MOUSE_SELF_TEST)
+static bool wait_for_mouse_test(void) {
+    const uint64_t start = scene_clock_monotonic_ns();
+    const uint64_t timeout_ns = UINT64_C(3000000000);
+    struct scene_input_event event;
+    while (scene_clock_monotonic_ns() - start < timeout_ns) {
+        while (scene_input_pop(&event)) {
+            if (event.type == SCENE_INPUT_EVENT_POINTER &&
+                (event.pointer.delta_x != 0 ||
+                event.pointer.delta_y != 0)) {
+                scene_log_u64("Injected pointer sequence: ", event.sequence);
+                scene_log_u64(
+                    "Injected pointer delta X: ",
+                    (uint64_t)(int64_t)event.pointer.delta_x
+                );
+                scene_log_u64(
+                    "Injected pointer delta Y: ",
+                    (uint64_t)(int64_t)event.pointer.delta_y
+                );
+                scene_log_u64(
+                    "PS/2 mouse packets received: ",
+                    scene_ps2_mouse_packets()
+                );
+                scene_log_u64("Input events dropped: ", scene_input_dropped());
                 return scene_input_dropped() == 0;
             }
         }
@@ -189,10 +224,17 @@ void kmain(void) {
         scene_irq_registered_count()
     );
     scene_input_init();
+    if (!scene_ps2_controller_init()) {
+        scene_panic("PS/2 controller initialization failed");
+    }
     if (!scene_ps2_keyboard_init()) {
         scene_panic("PS/2 keyboard initialization failed");
     }
     scene_log_line("PS/2 keyboard: ready");
+    if (!scene_ps2_mouse_init()) {
+        scene_panic("PS/2 mouse initialization failed");
+    }
+    scene_log_line("PS/2 mouse: ready");
     scene_log_u64(
         "Registered IRQ handlers after input: ",
         scene_irq_registered_count()
@@ -373,6 +415,14 @@ void kmain(void) {
     scene_log_line("Triggering page-fault self-test");
     *(volatile uint64_t *)(uintptr_t)UINT64_C(0xffffd00000000000) =
         UINT64_C(0xdeadbeef);
+#endif
+
+#if defined(SCENEOS_MOUSE_SELF_TEST)
+    scene_log_line("Waiting for injected PS/2 mouse motion");
+    if (!wait_for_mouse_test()) {
+        scene_panic("PS/2 mouse input self-test timed out");
+    }
+    scene_log_line("PS/2 mouse motion: verified");
 #endif
 
     if (boot_info.framebuffer != 0) {

@@ -1,29 +1,14 @@
 #include <scene/input.h>
 #include <scene/irq.h>
+#include <scene/ps2_controller.h>
 #include <scene/ps2_keyboard.h>
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-#define SCENE_PS2_DATA_PORT 0x60U
-#define SCENE_PS2_STATUS_PORT 0x64U
-#define SCENE_PS2_COMMAND_PORT 0x64U
-#define SCENE_PS2_STATUS_OUTPUT_FULL (1U << 0U)
-#define SCENE_PS2_STATUS_INPUT_FULL (1U << 1U)
-#define SCENE_PS2_STATUS_AUXILIARY (1U << 5U)
-#define SCENE_PS2_DISABLE_FIRST_PORT 0xadU
-#define SCENE_PS2_ENABLE_FIRST_PORT 0xaeU
-#define SCENE_PS2_READ_CONFIGURATION 0x20U
-#define SCENE_PS2_WRITE_CONFIGURATION 0x60U
-#define SCENE_PS2_CONFIG_FIRST_IRQ (1U << 0U)
-#define SCENE_PS2_CONFIG_FIRST_CLOCK_DISABLED (1U << 4U)
-#define SCENE_PS2_CONFIG_TRANSLATION (1U << 6U)
 #define SCENE_PS2_KEYBOARD_ENABLE_SCANNING 0xf4U
-#define SCENE_PS2_KEYBOARD_ACKNOWLEDGE 0xfaU
-#define SCENE_PS2_KEYBOARD_RESEND 0xfeU
 #define SCENE_PS2_KEYBOARD_IRQ 1U
-#define SCENE_PS2_WAIT_LIMIT 100000U
 
 static bool key_pressed[SCENE_KEY_COUNT];
 static bool extended_scancode;
@@ -35,80 +20,6 @@ static bool left_alt;
 static bool right_alt;
 static bool caps_lock;
 static volatile uint64_t received_scancodes;
-
-static uint8_t read_port8(uint16_t port) {
-    uint8_t value;
-    __asm__ volatile ("inb %1, %0" : "=a"(value) : "Nd"(port));
-    return value;
-}
-
-static void write_port8(uint16_t port, uint8_t value) {
-    __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
-}
-
-static bool wait_input_ready(void) {
-    for (size_t attempt = 0; attempt < SCENE_PS2_WAIT_LIMIT; ++attempt) {
-        if ((read_port8(SCENE_PS2_STATUS_PORT) &
-            SCENE_PS2_STATUS_INPUT_FULL) == 0) {
-            return true;
-        }
-        __asm__ volatile ("pause");
-    }
-    return false;
-}
-
-static bool wait_output_ready(void) {
-    for (size_t attempt = 0; attempt < SCENE_PS2_WAIT_LIMIT; ++attempt) {
-        if ((read_port8(SCENE_PS2_STATUS_PORT) &
-            SCENE_PS2_STATUS_OUTPUT_FULL) != 0) {
-            return true;
-        }
-        __asm__ volatile ("pause");
-    }
-    return false;
-}
-
-static bool write_controller_command(uint8_t command) {
-    if (!wait_input_ready()) {
-        return false;
-    }
-    write_port8(SCENE_PS2_COMMAND_PORT, command);
-    return true;
-}
-
-static bool write_data(uint8_t value) {
-    if (!wait_input_ready()) {
-        return false;
-    }
-    write_port8(SCENE_PS2_DATA_PORT, value);
-    return true;
-}
-
-static void flush_output(void) {
-    for (size_t count = 0; count < 32U; ++count) {
-        if ((read_port8(SCENE_PS2_STATUS_PORT) &
-            SCENE_PS2_STATUS_OUTPUT_FULL) == 0) {
-            return;
-        }
-        (void)read_port8(SCENE_PS2_DATA_PORT);
-    }
-}
-
-static bool send_keyboard_command(uint8_t command) {
-    for (size_t attempt = 0; attempt < 3U; ++attempt) {
-        if (!write_data(command) || !wait_output_ready()) {
-            return false;
-        }
-        const uint8_t response = read_port8(SCENE_PS2_DATA_PORT);
-        if (response == SCENE_PS2_KEYBOARD_ACKNOWLEDGE) {
-            return true;
-        }
-        if (response != SCENE_PS2_KEYBOARD_RESEND) {
-            return false;
-        }
-    }
-    return false;
-}
 
 static enum scene_key_code decode_standard(uint8_t code) {
     switch (code) {
@@ -273,12 +184,12 @@ static void keyboard_irq(uint32_t irq, void *context) {
     (void)irq;
     (void)context;
     for (size_t count = 0; count < 16U; ++count) {
-        const uint8_t status = read_port8(SCENE_PS2_STATUS_PORT);
+        const uint8_t status = scene_ps2_status();
         if ((status & SCENE_PS2_STATUS_OUTPUT_FULL) == 0 ||
             (status & SCENE_PS2_STATUS_AUXILIARY) != 0) {
             return;
         }
-        handle_scancode(read_port8(SCENE_PS2_DATA_PORT));
+        handle_scancode(scene_ps2_read_data());
     }
 }
 
@@ -296,22 +207,10 @@ bool scene_ps2_keyboard_init(void) {
         key_pressed[index] = false;
     }
 
-    if (!write_controller_command(SCENE_PS2_DISABLE_FIRST_PORT)) {
-        return false;
-    }
-    flush_output();
-    if (!write_controller_command(SCENE_PS2_READ_CONFIGURATION) ||
-        !wait_output_ready()) {
-        return false;
-    }
-    uint8_t configuration = read_port8(SCENE_PS2_DATA_PORT);
-    configuration |= SCENE_PS2_CONFIG_FIRST_IRQ |
-        SCENE_PS2_CONFIG_TRANSLATION;
-    configuration &= (uint8_t)~SCENE_PS2_CONFIG_FIRST_CLOCK_DISABLED;
-    if (!write_controller_command(SCENE_PS2_WRITE_CONFIGURATION) ||
-        !write_data(configuration) ||
-        !write_controller_command(SCENE_PS2_ENABLE_FIRST_PORT) ||
-        !send_keyboard_command(SCENE_PS2_KEYBOARD_ENABLE_SCANNING)) {
+    if (!scene_ps2_device_command(
+        SCENE_PS2_DEVICE_KEYBOARD,
+        SCENE_PS2_KEYBOARD_ENABLE_SCANNING
+    )) {
         return false;
     }
     return scene_irq_attach(SCENE_PS2_KEYBOARD_IRQ, keyboard_irq, 0);

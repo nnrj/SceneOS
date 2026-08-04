@@ -10,6 +10,8 @@ set(SCENEOS_KERNEL_SOURCES
     src/memory/physical.c
     src/graphics/framebuffer.c
     src/drivers/input/ps2_keyboard.c
+    src/drivers/input/ps2_controller.c
+    src/drivers/input/ps2_mouse.c
     src/arch/x86_64/descriptors.c
     src/arch/x86_64/exceptions.c
     src/arch/x86_64/acpi.c
@@ -59,6 +61,12 @@ endif()
 if(SCENEOS_KEYBOARD_SELF_TEST)
     target_compile_definitions(scene-kernel PRIVATE
         SCENEOS_KEYBOARD_SELF_TEST=1
+    )
+endif()
+
+if(SCENEOS_MOUSE_SELF_TEST)
+    target_compile_definitions(scene-kernel PRIVATE
+        SCENEOS_MOUSE_SELF_TEST=1
     )
 endif()
 
