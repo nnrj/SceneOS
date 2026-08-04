@@ -6,10 +6,12 @@
 #include <scene/framebuffer.h>
 #include <scene/heap.h>
 #include <scene/interrupts.h>
+#include <scene/input.h>
 #include <scene/irq.h>
 #include <scene/log.h>
 #include <scene/paging.h>
 #include <scene/physical.h>
+#include <scene/ps2_keyboard.h>
 #include <scene/timer.h>
 #include <scene/timer_queue.h>
 
@@ -37,6 +39,34 @@ static void record_irq_probe(uint32_t irq, void *context) {
         ++*(uint32_t *)context;
     }
 }
+
+#if defined(SCENEOS_KEYBOARD_SELF_TEST)
+static bool wait_for_keyboard_test(void) {
+    const uint64_t start = scene_clock_monotonic_ns();
+    const uint64_t timeout_ns = UINT64_C(3000000000);
+    struct scene_input_event event;
+    while (scene_clock_monotonic_ns() - start < timeout_ns) {
+        while (scene_input_pop(&event)) {
+            if (event.type == SCENE_INPUT_EVENT_KEY &&
+                event.key.code == SCENE_KEY_A && event.key.pressed) {
+                scene_log_u64("Injected input sequence: ", event.sequence);
+                scene_log_u64("Injected key code: ", event.key.code);
+                scene_log_u64(
+                    "PS/2 scancodes received: ",
+                    scene_ps2_keyboard_scancodes()
+                );
+                scene_log_u64(
+                    "Input events dropped: ",
+                    scene_input_dropped()
+                );
+                return scene_input_dropped() == 0;
+            }
+        }
+        __asm__ volatile ("pause" : : : "memory");
+    }
+    return false;
+}
+#endif
 
 void kmain(void) {
     static struct scene_boot_info boot_info;
@@ -156,6 +186,15 @@ void kmain(void) {
     scene_log_line("IRQ registration lifecycle: verified");
     scene_log_u64(
         "Registered IRQ handlers: ",
+        scene_irq_registered_count()
+    );
+    scene_input_init();
+    if (!scene_ps2_keyboard_init()) {
+        scene_panic("PS/2 keyboard initialization failed");
+    }
+    scene_log_line("PS/2 keyboard: ready");
+    scene_log_u64(
+        "Registered IRQ handlers after input: ",
         scene_irq_registered_count()
     );
     scene_log_u64("PIT timer frequency: ", scene_timer_frequency());
@@ -343,6 +382,14 @@ void kmain(void) {
     } else {
         scene_log_line("Framebuffer: unavailable; continuing in headless mode");
     }
+
+#if defined(SCENEOS_KEYBOARD_SELF_TEST)
+    scene_log_line("Waiting for injected PS/2 key A");
+    if (!wait_for_keyboard_test()) {
+        scene_panic("PS/2 keyboard input self-test timed out");
+    }
+    scene_log_line("PS/2 key A press: verified");
+#endif
 
     scene_log_line("Bootstrap complete. Halting the bootstrap processor.");
     scene_arch_halt_forever();

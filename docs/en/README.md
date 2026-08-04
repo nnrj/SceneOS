@@ -15,11 +15,13 @@
 - [Coding and interface guidelines](development/coding-guidelines.md)
 - [Early exceptions and physical memory](development/early-exceptions-and-memory.md)
 - [Hardware interrupts and early time base](development/interrupts-and-time.md)
+- [Input core and PS/2 keyboard](development/input-and-ps2.md)
 
 ## API documentation
 
 - [API documentation index](api/README.md)
 - [Boot contract](api/boot-contract.md)
 - [Interrupt and time interfaces](api/interrupt-and-time.md)
+- [Input event interfaces](api/input-events.md)
 - [AI operation protocol draft](api/ai-operation-protocol.md)
 - [Runtime linking and dependency policy](api/runtime-linking.md)

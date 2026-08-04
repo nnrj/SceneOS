@@ -35,6 +35,9 @@ jobs:
       - name: Validate page-fault diagnostics
         run: python3 tools/scenectl.py smoke --page-fault --timeout 8
 
+      - name: Validate PS/2 keyboard input
+        run: python3 tools/scenectl.py smoke --keyboard --timeout 10
+
       - name: Build bootable image
         run: python3 tools/scenectl.py image
 

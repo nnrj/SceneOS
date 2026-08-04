@@ -86,4 +86,8 @@ GitHub Actions 会在临时 Linux runner 中安装工具、构建 ISO，并通�
 QEMU 串口应输出 `SceneOS kernel bootstrap`、GDT/TSS/IDT、bootloader、内存
 映射、`Local APIC + IOAPIC`、IRQ 注册、PIT GSI、硬件 tick、HPET/TSC 时钟源、
 定时器队列、首次物理页和 framebuffer 信息。图形窗口应显示深蓝桌面、任务栏
-和一个验证窗口。
+和一个验证窗口，串口还应报告 PS/2 键盘已就绪。
+
+使用 `python tools/scenectl.py smoke --keyboard --timeout 10` 执行输入自动验收。
+脚本等待内核进入测试点，通过 QEMU monitor 发送 `A`，并要求 IRQ1 交付语义
+按键事件且队列无丢失。该测试为 headless，不会向宿主桌面输入字符。

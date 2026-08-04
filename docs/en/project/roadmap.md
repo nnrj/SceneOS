@@ -40,9 +40,11 @@ observable completion criteria.
   version complete)
 - Fixed legacy-IRQ registration, MADT-override routing, attach/detach, and PIT
   driver migration. (initial version complete)
+- PS/2 Set 1 keyboard input and a unified semantic key-event queue. (initial
+  version complete)
 - CPUID/TSC frequency cross-checking, Local APIC timer evaluation, and dynamic
   timer capacity.
-- PS/2 keyboard and mouse with a unified input event model.
+- PS/2 mouse, keyboard layout/text translation, and dynamic input capacity.
 
 ## M3: threads, processes, and user space
 

@@ -15,6 +15,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 import zipfile
 
@@ -315,6 +316,9 @@ def command_configure(arguments: argparse.Namespace) -> None:
     page_fault_test = (
         "ON" if getattr(arguments, "page_fault", False) else "OFF"
     )
+    keyboard_test = (
+        "ON" if getattr(arguments, "keyboard", False) else "OFF"
+    )
     force_tsc_clock = (
         "ON" if getattr(arguments, "tsc_clock", False) else "OFF"
     )
@@ -324,6 +328,7 @@ def command_configure(arguments: argparse.Namespace) -> None:
             "--preset", arguments.preset,
             f"-DSCENEOS_EXCEPTION_SELF_TEST={self_test}",
             f"-DSCENEOS_PAGE_FAULT_SELF_TEST={page_fault_test}",
+            f"-DSCENEOS_KEYBOARD_SELF_TEST={keyboard_test}",
             f"-DSCENEOS_FORCE_TSC_CLOCK={force_tsc_clock}",
         ],
         environment=environment,
@@ -568,16 +573,53 @@ def command_smoke(arguments: argparse.Namespace) -> None:
         "-no-shutdown",
         "-drive", f"format=raw,file=fat:rw:{image_root.as_posix()}",
     ]
+    if arguments.keyboard:
+        command.extend(["-monitor", "stdio"])
     print("+", " ".join(command))
-    try:
-        subprocess.run(
+    if arguments.keyboard:
+        process = subprocess.Popen(
             command,
             cwd=ROOT,
-            check=False,
-            timeout=arguments.timeout,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
         )
-    except subprocess.TimeoutExpired:
-        pass
+        deadline = time.monotonic() + arguments.timeout
+        marker = "Waiting for injected PS/2 key A"
+        while process.poll() is None and time.monotonic() < deadline:
+            if serial_log.is_file():
+                current = serial_log.read_text(
+                    encoding="utf-8", errors="replace"
+                )
+                if marker in current:
+                    break
+            time.sleep(0.05)
+        if process.poll() is None and process.stdin is not None:
+            try:
+                process.stdin.write("sendkey a\n")
+                process.stdin.flush()
+            except (BrokenPipeError, OSError):
+                pass
+        remaining = max(0.1, deadline - time.monotonic())
+        try:
+            process.wait(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+        finally:
+            if process.stdin is not None:
+                process.stdin.close()
+    else:
+        try:
+            subprocess.run(
+                command,
+                cwd=ROOT,
+                check=False,
+                timeout=arguments.timeout,
+            )
+        except subprocess.TimeoutExpired:
+            pass
 
     if not serial_log.is_file():
         raise SceneCtlError("QEMU did not create a serial log")
@@ -613,6 +655,22 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "Page fault access: write",
             "Page fault privilege: supervisor",
         )
+    elif arguments.keyboard:
+        expected = (
+            "SceneOS kernel bootstrap",
+            "Interrupt controller: Local APIC + IOAPIC",
+            "IRQ registration lifecycle: verified",
+            "PS/2 keyboard: ready",
+            "Registered IRQ handlers after input: 2",
+            "Hardware timer ticks observed:",
+            f"Clock source: {clock_source}",
+            "Waiting for injected PS/2 key A",
+            "Injected input sequence:",
+            "Injected key code: 30",
+            "PS/2 scancodes received:",
+            "PS/2 key A press: verified",
+            "Bootstrap complete",
+        )
     else:
         expected = (
             "SceneOS kernel bootstrap",
@@ -627,6 +685,8 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "PIT interrupt GSI:",
             "IRQ registration lifecycle: verified",
             "Registered IRQ handlers: 1",
+            "PS/2 keyboard: ready",
+            "Registered IRQ handlers after input: 2",
             "PIT timer frequency: 100",
             "Hardware timer ticks observed:",
             f"Clock source: {clock_source}",
@@ -726,6 +786,11 @@ def parser() -> argparse.ArgumentParser:
         "--page-fault",
         action="store_true",
         help="write an unmapped address and validate page-fault diagnostics",
+    )
+    fault_tests.add_argument(
+        "--keyboard",
+        action="store_true",
+        help="inject a key through QEMU and validate PS/2 input delivery",
     )
     smoke.add_argument(
         "--tsc-clock",

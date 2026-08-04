@@ -86,4 +86,9 @@ The core IRQ layer now owns a fixed 16-entry legacy-line registry. The x86
 layer routes each attached line through its MADT override to the IOAPIC; PIT
 also attaches IRQ0 through this interface instead of being hard-coded in the
 interrupt dispatcher. Cross-CPU clock synchronization, Local APIC timer
-support, dynamic queue capacity, and shared IRQ handlers remain pending.
+support, dynamic queue capacity, and shared IRQ handlers remain pending. The
+input core adds a hardware-neutral semantic key-event queue. The initial i8042
+driver configures PS/2 translation, consumes Set 1 bytes on IRQ1, tracks key
+state and modifiers, and publishes press/release/repeat events. Text and layout
+translation stay above this device layer; mouse and multi-consumer routing are
+not implemented yet.

@@ -85,5 +85,10 @@ isolated from physical development machines.
 The QEMU serial console should report `SceneOS kernel bootstrap`, GDT/TSS/IDT,
 bootloader, memory-map, `Local APIC + IOAPIC`, IRQ registration, PIT GSI,
 hardware ticks, the HPET/TSC clock source, timer-queue verification, first
-physical page, and framebuffer information. The display should show a dark
-blue desktop, taskbar, and validation window.
+physical page, PS/2 keyboard readiness, and framebuffer information. The
+display should show a dark blue desktop, taskbar, and validation window.
+
+Run `python tools/scenectl.py smoke --keyboard --timeout 10` for the automated
+input acceptance test. The runner waits for the kernel, sends `A` through the
+QEMU monitor, and requires an IRQ1-delivered semantic key event with no queue
+loss. This mode is headless and does not type into the host desktop.

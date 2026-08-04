@@ -2,12 +2,14 @@ set(SCENEOS_KERNEL_SOURCES
     src/main.c
     src/boot/limine_boot.c
     src/core/clock.c
+    src/core/input.c
     src/core/irq.c
     src/core/log.c
     src/core/timer_queue.c
     src/memory/heap.c
     src/memory/physical.c
     src/graphics/framebuffer.c
+    src/drivers/input/ps2_keyboard.c
     src/arch/x86_64/descriptors.c
     src/arch/x86_64/exceptions.c
     src/arch/x86_64/acpi.c
@@ -51,6 +53,12 @@ endif()
 if(SCENEOS_FORCE_TSC_CLOCK)
     target_compile_definitions(scene-kernel PRIVATE
         SCENEOS_FORCE_TSC_CLOCK=1
+    )
+endif()
+
+if(SCENEOS_KEYBOARD_SELF_TEST)
+    target_compile_definitions(scene-kernel PRIVATE
+        SCENEOS_KEYBOARD_SELF_TEST=1
     )
 endif()
 

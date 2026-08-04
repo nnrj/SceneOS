@@ -7,6 +7,7 @@ implementations.
 
 - [Boot contract](boot-contract.md)
 - [Interrupt and time interfaces](interrupt-and-time.md)
+- [Input event interfaces](input-events.md)
 - [AI operation protocol draft](ai-operation-protocol.md)
 - [Runtime linking and dependency policy](runtime-linking.md)
 
