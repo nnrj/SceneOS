@@ -598,6 +598,8 @@ def command_smoke(arguments: argparse.Namespace) -> None:
         expected = (
             "SceneOS kernel bootstrap",
             "Interrupt controller: Local APIC + IOAPIC",
+            "IRQ registration lifecycle: verified",
+            "Registered IRQ handlers: 1",
             "Hardware timer ticks observed:",
             f"Clock source: {clock_source}",
             "Clock source frequency Hz:",
@@ -623,6 +625,8 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "SceneOS-owned page tables:",
             "Interrupt controller: Local APIC + IOAPIC",
             "PIT interrupt GSI:",
+            "IRQ registration lifecycle: verified",
+            "Registered IRQ handlers: 1",
             "PIT timer frequency: 100",
             "Hardware timer ticks observed:",
             f"Clock source: {clock_source}",

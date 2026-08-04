@@ -1,4 +1,5 @@
 #include <scene/arch.h>
+#include <scene/irq.h>
 #include <scene/timer.h>
 
 #include <stdint.h>
@@ -8,13 +9,17 @@
 #define SCENE_PIT_COMMAND 0x43U
 #define SCENE_PIT_RATE_GENERATOR 0x36U
 
-extern bool scene_arch_irq_unmask(uint8_t irq);
-
 static volatile uint64_t elapsed_ticks;
 static uint32_t configured_frequency;
 
 static void write_port8(uint16_t port, uint8_t value) {
     __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
+}
+
+static void handle_timer_irq(uint32_t irq, void *context) {
+    (void)irq;
+    (void)context;
+    ++elapsed_ticks;
 }
 
 bool scene_timer_init(uint32_t frequency_hz) {
@@ -32,7 +37,7 @@ bool scene_timer_init(uint32_t frequency_hz) {
     write_port8(SCENE_PIT_COMMAND, SCENE_PIT_RATE_GENERATOR);
     write_port8(SCENE_PIT_CHANNEL0, (uint8_t)(divisor & UINT8_MAX));
     write_port8(SCENE_PIT_CHANNEL0, (uint8_t)(divisor >> 8U));
-    return scene_arch_irq_unmask(0);
+    return scene_irq_attach(0, handle_timer_irq, 0);
 }
 
 uint32_t scene_timer_frequency(void) {
@@ -41,10 +46,6 @@ uint32_t scene_timer_frequency(void) {
 
 uint64_t scene_timer_ticks(void) {
     return elapsed_ticks;
-}
-
-void scene_timer_handle_tick(void) {
-    ++elapsed_ticks;
 }
 
 uint64_t scene_arch_timestamp_counter(void) {

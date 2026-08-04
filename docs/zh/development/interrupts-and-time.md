@@ -19,9 +19,14 @@ spurious vector。公共入口保存通用寄存器、按 SysV ABI 对齐 C 调�
 分派器后恢复现场并执行 `iretq`。IRQ0 更新 64 位 tick，再按当前控制器发送
 Local APIC EOI 或 8259A EOI。
 
-目前只有 IRQ0 被开放；其余 IOAPIC 和 PIC 输入保持屏蔽，因此驱动不能自行
-占用向量。后续通用 IRQ 注册层需要管理向量分配、共享中断、屏蔽、注销以及
-并发安全。
+核心层维护固定 16 项 legacy IRQ 注册表。驱动通过 `scene_irq_attach()` 注册
+handler；只有架构路由成功后注册才生效。重复注册、越界 line 和不匹配的注销
+会失败，`scene_irq_detach()` 在清除 handler 前重新屏蔽 IOAPIC/PIC 输入。
+
+MADT 的全部 ISA Interrupt Source Override 会保存到每 line 的 GSI/flags，而非
+只处理 IRQ0。PIT 现在使用同一注册接口附着 IRQ0；公共中断分派器只查表调用，
+随后按当前控制器发送 EOI。目前不支持共享 IRQ，注册与注销也只允许在串行启动
+阶段使用；并发安全和动态向量分配仍待实现。
 
 ## PIT 与 watchdog
 
@@ -61,6 +66,7 @@ python tools/scenectl.py smoke --page-fault
 ```
 
 默认测试必须看到 `Interrupt controller: Local APIC + IOAPIC`、PIT GSI、
-100 Hz 频率、至少三个硬件 tick、`Clock source: HPET` 和定时器顺序/取消验证。
+IRQ 生命周期验证、单个已注册 handler、100 Hz 频率、至少三个硬件 tick、
+`Clock source: HPET` 和定时器顺序/取消验证。
 `smoke --tsc-clock` 要求 `Clock source: calibrated TSC`。页故障测试也检查这些
 步骤已完成，确保异常路径和 IRQ/时间路径可以共存。

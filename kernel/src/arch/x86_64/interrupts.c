@@ -1,6 +1,6 @@
 #include <scene/exceptions.h>
 #include <scene/interrupts.h>
-#include <scene/timer.h>
+#include <scene/irq.h>
 
 #include <stdint.h>
 
@@ -15,7 +15,11 @@
 extern const uintptr_t scene_interrupt_stubs[SCENE_PIC_IRQ_COUNT];
 extern void scene_apic_spurious_stub(void);
 extern bool scene_arch_apic_init(const struct scene_boot_info *boot_info);
-extern bool scene_arch_apic_route_timer(uint8_t vector);
+extern bool scene_arch_apic_set_irq(
+    uint8_t irq,
+    uint8_t vector,
+    bool masked
+);
 extern void scene_arch_apic_eoi(void);
 extern bool scene_arch_apic_ready(void);
 extern uint32_t scene_arch_apic_id(void);
@@ -72,17 +76,43 @@ static void end_of_interrupt(uint8_t irq) {
     write_port8(SCENE_PIC_MASTER_COMMAND, SCENE_PIC_EOI);
 }
 
-bool scene_arch_irq_unmask(uint8_t irq) {
+bool scene_arch_irq_enable(uint32_t irq) {
     if (irq >= SCENE_PIC_IRQ_COUNT) {
         return false;
     }
-    if (irq == 0U && scene_arch_apic_ready()) {
-        return scene_arch_apic_route_timer(SCENE_PIC_IRQ_BASE);
-    } else {
-        interrupt_mask &= (uint16_t)~(UINT16_C(1) << irq);
-        write_masks();
-        return true;
+    if (scene_arch_apic_ready()) {
+        return scene_arch_apic_set_irq(
+            (uint8_t)irq,
+            (uint8_t)(SCENE_PIC_IRQ_BASE + irq),
+            false
+        );
     }
+    interrupt_mask &= (uint16_t)~(UINT16_C(1) << irq);
+    if (irq >= 8U) {
+        interrupt_mask &= (uint16_t)~(UINT16_C(1) << 2U);
+    }
+    write_masks();
+    return true;
+}
+
+bool scene_arch_irq_disable(uint32_t irq) {
+    if (irq >= SCENE_PIC_IRQ_COUNT) {
+        return false;
+    }
+    if (scene_arch_apic_ready()) {
+        return scene_arch_apic_set_irq(
+            (uint8_t)irq,
+            (uint8_t)(SCENE_PIC_IRQ_BASE + irq),
+            true
+        );
+    }
+    interrupt_mask |= (uint16_t)(UINT16_C(1) << irq);
+    if (irq >= 8U && (interrupt_mask & UINT16_C(0xff00)) ==
+        UINT16_C(0xff00)) {
+        interrupt_mask |= UINT16_C(1) << 2U;
+    }
+    write_masks();
+    return true;
 }
 
 void scene_arch_interrupts_init(void) {
@@ -142,9 +172,7 @@ void scene_arch_interrupt_dispatch(
     }
 
     const uint8_t irq = (uint8_t)(frame->vector - SCENE_PIC_IRQ_BASE);
-    if (irq == 0U) {
-        scene_timer_handle_tick();
-    }
+    (void)scene_irq_dispatch(irq);
     if (scene_arch_apic_ready()) {
         scene_arch_apic_eoi();
     } else {

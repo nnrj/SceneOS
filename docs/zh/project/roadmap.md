@@ -28,6 +28,8 @@
 - PIT 100 Hz 硬件 tick 与中断 watchdog。（已完成初版）
 - 共享 ACPI 表查询、HPET 首选时钟、PIT 校准 TSC 回退、纳秒换算与固定容量
   定时器队列。（已完成初版）
+- 固定 legacy IRQ 注册表、MADT override 路由、注册/注销与 PIT 驱动迁移。
+  （已完成初版）
 - CPUID/TSC 频率交叉校验、Local APIC timer 评估与动态定时器容量。
 - PS/2 键盘鼠标与统一输入事件。
 

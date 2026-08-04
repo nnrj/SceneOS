@@ -83,7 +83,7 @@ isolated from physical development machines.
 ## Acceptance signal
 
 The QEMU serial console should report `SceneOS kernel bootstrap`, GDT/TSS/IDT,
-bootloader, memory-map, `Local APIC + IOAPIC`, PIT GSI, hardware ticks, the
-HPET/TSC clock source, timer-queue verification, first physical page, and framebuffer
-information. The display should show a dark blue desktop, taskbar, and
-validation window.
+bootloader, memory-map, `Local APIC + IOAPIC`, IRQ registration, PIT GSI,
+hardware ticks, the HPET/TSC clock source, timer-queue verification, first
+physical page, and framebuffer information. The display should show a dark
+blue desktop, taskbar, and validation window.

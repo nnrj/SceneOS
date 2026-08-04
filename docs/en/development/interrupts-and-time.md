@@ -23,9 +23,18 @@ call stack for the SysV ABI, invokes the dispatcher, restores state, and
 returns with `iretq`. IRQ0 increments the 64-bit tick count before sending a
 Local APIC or 8259A EOI according to the active controller.
 
-Only IRQ0 is currently open. All other IOAPIC and PIC inputs remain masked, so
-drivers must not claim vectors directly. A future general IRQ layer must own
-vector allocation, sharing, masking, deregistration, and concurrency.
+The core owns a fixed 16-entry legacy IRQ registry. Drivers attach a handler
+through `scene_irq_attach()`, and registration becomes visible only after the
+architecture route succeeds. Duplicate attachment, an out-of-range line, and
+a mismatched detach fail. `scene_irq_detach()` masks the IOAPIC/PIC input before
+clearing the handler.
+
+Every ISA Interrupt Source Override in MADT is retained as per-line GSI and
+flags instead of handling IRQ0 alone. PIT now attaches IRQ0 through the same
+interface. The common interrupt dispatcher only invokes the registered entry,
+then sends EOI through the active controller. Shared IRQs are not supported,
+and attach/detach are currently restricted to serial boot; concurrency and
+dynamic vector allocation remain future work.
 
 ## PIT and watchdog
 
@@ -72,7 +81,8 @@ python tools/scenectl.py smoke --page-fault
 ```
 
 The default test requires `Interrupt controller: Local APIC + IOAPIC`, the PIT
-GSI, the 100 Hz frequency, at least three hardware ticks, `Clock source: HPET`,
-and timer ordering/cancellation verification. `smoke --tsc-clock` requires
+GSI, IRQ lifecycle verification, one registered handler, the 100 Hz frequency,
+at least three hardware ticks, `Clock source: HPET`, and timer
+ordering/cancellation verification. `smoke --tsc-clock` requires
 `Clock source: calibrated TSC`. The page-fault test requires the default steps
 too, proving that exception and IRQ/time paths coexist.

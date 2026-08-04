@@ -82,5 +82,8 @@ RSDP, XSDT/RSDT, and target tables. The core time layer prefers the 64-bit HPET
 main counter and falls back to a PIT-calibrated TSC, exposing either as
 nanosecond monotonic time. A fixed 32-entry min-heap timer queue supports
 scheduling, cancellation, and due-callback dispatch outside IRQ context.
-Cross-CPU clock synchronization, Local APIC timer support, dynamic queue
-capacity, and general driver IRQ registration remain pending.
+The core IRQ layer now owns a fixed 16-entry legacy-line registry. The x86
+layer routes each attached line through its MADT override to the IOAPIC; PIT
+also attaches IRQ0 through this interface instead of being hard-coded in the
+interrupt dispatcher. Cross-CPU clock synchronization, Local APIC timer
+support, dynamic queue capacity, and shared IRQ handlers remain pending.

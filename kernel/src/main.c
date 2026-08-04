@@ -6,6 +6,7 @@
 #include <scene/framebuffer.h>
 #include <scene/heap.h>
 #include <scene/interrupts.h>
+#include <scene/irq.h>
 #include <scene/log.h>
 #include <scene/paging.h>
 #include <scene/physical.h>
@@ -17,6 +18,7 @@ static size_t timer_callback_count;
 static const uint32_t timer_marker_first = 1U;
 static const uint32_t timer_marker_second = 2U;
 static const uint32_t timer_marker_cancelled = 3U;
+static uint32_t irq_probe_count;
 
 static void record_timer_callback(void *context) {
     if (context != 0 &&
@@ -26,6 +28,13 @@ static void record_timer_callback(void *context) {
         timer_callback_results[timer_callback_count] =
             *(const uint32_t *)context;
         ++timer_callback_count;
+    }
+}
+
+static void record_irq_probe(uint32_t irq, void *context) {
+    (void)irq;
+    if (context != 0) {
+        ++*(uint32_t *)context;
     }
 }
 
@@ -130,6 +139,25 @@ void kmain(void) {
     if (!scene_timer_init(100U)) {
         scene_panic("PIT timer initialization failed");
     }
+    irq_probe_count = 0;
+    if (scene_irq_registered_count() != 1U ||
+        !scene_irq_attach(15U, record_irq_probe, &irq_probe_count) ||
+        scene_irq_attach(15U, record_irq_probe, &irq_probe_count) ||
+        scene_irq_detach(15U, record_irq_probe, 0) ||
+        !scene_irq_detach(15U, record_irq_probe, &irq_probe_count) ||
+        scene_irq_attach(
+            SCENE_IRQ_LINE_COUNT,
+            record_irq_probe,
+            &irq_probe_count
+        ) ||
+        scene_irq_registered_count() != 1U || irq_probe_count != 0U) {
+        scene_panic("IRQ registration lifecycle test failed");
+    }
+    scene_log_line("IRQ registration lifecycle: verified");
+    scene_log_u64(
+        "Registered IRQ handlers: ",
+        scene_irq_registered_count()
+    );
     scene_log_u64("PIT timer frequency: ", scene_timer_frequency());
     scene_arch_interrupts_enable();
     if (!scene_timer_wait_ticks(3U)) {

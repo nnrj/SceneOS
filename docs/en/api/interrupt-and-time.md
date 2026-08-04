@@ -16,6 +16,23 @@ ownership, APIC activation, device timer initialization, and only then `sti`.
 The current implementation covers the BSP and one IOAPIC as an early boot
 configuration.
 
+## IRQ registration
+
+- `scene_irq_attach(irq, handler, context)` installs an exclusive handler and
+  enables its architecture input; failed routing rolls registration back.
+- `scene_irq_detach(irq, handler, context)` requires an exact handler/context
+  match and masks the input before clearing registration.
+- `scene_irq_dispatch(irq)` is called by the architecture entry and returns
+  `false` when no handler exists.
+- `scene_irq_registered_count()` returns the current exclusive registration
+  count.
+
+`SCENE_IRQ_LINE_COUNT` is currently 16 and describes legacy ISA IRQ lines, not
+arbitrary IDT vectors or GSIs. A line accepts one handler. Shared interrupts,
+priority, concurrent registration, and user-visible capabilities are not yet
+available. Drivers must not edit the IDT or IOAPIC redirection entries or send
+EOI themselves.
+
 ## Time interface
 
 - `scene_timer_init(frequency_hz)` configures PIT channel 0 and routes IRQ0.
@@ -27,8 +44,9 @@ configuration.
 
 `scene_timer_ticks()` currently relies on aligned x86-64 64-bit access. It has
 no SMP synchronization guarantee and is not a stable wall clock, a
-timeout-safe source, or a user-space ABI. Drivers must not call
-`scene_timer_handle_tick()` directly; that entry belongs to the IRQ dispatcher.
+timeout-safe source, or a user-space ABI. The PIT tick handler is an internal
+timer-module implementation installed through the IRQ registry; drivers must
+not call it directly.
 
 ## Monotonic clock
 

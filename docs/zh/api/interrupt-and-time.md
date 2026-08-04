@@ -13,6 +13,20 @@
 调用顺序固定为：异常 IDT、PIC 兼容初始化、分页接管、APIC 激活、设备定时器
 初始化，最后才允许 `sti`。当前实现仅支持 BSP 和单一 IOAPIC 的早期场景。
 
+## IRQ 注册
+
+- `scene_irq_attach(irq, handler, context)`：注册独占 handler，并在架构层开放
+  对应输入；路由失败时回滚注册。
+- `scene_irq_detach(irq, handler, context)`：要求 handler/context 完全匹配，
+  先屏蔽输入再清除注册。
+- `scene_irq_dispatch(irq)`：由架构中断入口调用；没有 handler 时返回 `false`。
+- `scene_irq_registered_count()`：返回当前独占注册数量。
+
+当前 `SCENE_IRQ_LINE_COUNT` 为 16，只表示 legacy ISA IRQ line，不是任意 IDT
+vector 或 GSI。一个 line 只能注册一个 handler；接口尚未提供共享 IRQ、优先级、
+并发注册或用户态可见能力。驱动不得自行编辑 IDT、IOAPIC redirection entry 或
+发送 EOI。
+
 ## 时间接口
 
 - `scene_timer_init(frequency_hz)`：配置 PIT channel 0 并路由 IRQ0。
@@ -22,8 +36,8 @@
   `false`。
 
 `scene_timer_ticks()` 当前依赖 x86-64 对齐 64 位读写。它还没有 SMP 同步保证，
-不能作为稳定 wall clock、超时安全来源或用户态 ABI。驱动也不得直接调用
-`scene_timer_handle_tick()`，该入口只属于 IRQ 分派器。
+不能作为稳定 wall clock、超时安全来源或用户态 ABI。PIT 的 tick handler 是
+定时器模块通过 IRQ 注册层安装的内部实现，驱动不得直接调用。
 
 ## 单调时钟
 

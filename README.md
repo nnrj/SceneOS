@@ -11,8 +11,9 @@ information, installs its own GDT/TSS/IDT and CR3, manages physical pages with
 per-region bitmaps, maps and unmaps 4 KiB pages, provides a reusable
 higher-half kernel heap, discovers APIC topology through ACPI MADT, routes a
 PIT hardware timer through Local APIC/IOAPIC, selects an HPET monotonic clock
-with a calibrated-TSC fallback, provides a fixed-capacity timer queue, and
-draws a simple framebuffer scene.
+with a calibrated-TSC fallback, dispatches hardware lines through a fixed IRQ
+registry, provides a fixed-capacity timer queue, and draws a simple framebuffer
+scene.
 
 ## Quick start
 

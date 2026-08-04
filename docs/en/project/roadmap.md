@@ -38,6 +38,8 @@ observable completion criteria.
 - Shared ACPI table lookup, HPET as the preferred clock, a PIT-calibrated TSC
   fallback, nanosecond conversion, and a fixed-capacity timer queue. (initial
   version complete)
+- Fixed legacy-IRQ registration, MADT-override routing, attach/detach, and PIT
+  driver migration. (initial version complete)
 - CPUID/TSC frequency cross-checking, Local APIC timer evaluation, and dynamic
   timer capacity.
 - PS/2 keyboard and mouse with a unified input event model.

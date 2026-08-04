@@ -74,5 +74,7 @@ M1 已安装 SceneOS 自有 x86-64 GDT、TSS 和异常 IDT。双重故障、NMI�
 路由到 BSP Local APIC。共享 ACPI 查询层校验 RSDP、XSDT/RSDT 和目标表；核心
 时间层优先使用 64 位 HPET 主计数器，缺失时以 PIT tick 校准 TSC，并统一提供
 纳秒单调时间。固定 32 项的小顶堆定时器队列支持调度、取消和在非 IRQ 上下文
-分派到期回调。跨 CPU 时钟同步、Local APIC timer、动态队列容量和通用驱动
-IRQ 注册仍待实现。
+分派到期回调。核心 IRQ 层已提供固定 16 项 legacy line 注册表；x86 层按 MADT
+override 将每条已注册 IRQ 路由到 IOAPIC，PIT 也通过相同接口注册 IRQ0，不再
+由中断分派器硬编码。跨 CPU 时钟同步、Local APIC timer、动态队列容量和 IRQ
+共享仍待实现。

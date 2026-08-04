@@ -6,6 +6,8 @@
 
 struct scene_boot_info;
 
+bool scene_arch_irq_enable(uint32_t irq);
+bool scene_arch_irq_disable(uint32_t irq);
 bool scene_arch_hpet_init(const struct scene_boot_info *boot_info);
 bool scene_arch_hpet_ready(void);
 uint64_t scene_arch_hpet_counter(void);

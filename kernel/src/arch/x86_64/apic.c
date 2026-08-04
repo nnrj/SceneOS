@@ -30,6 +30,7 @@
 #define SCENE_ACPI_MADT_IO_APIC 1U
 #define SCENE_ACPI_MADT_INTERRUPT_OVERRIDE 2U
 #define SCENE_ACPI_MADT_LOCAL_APIC_OVERRIDE 5U
+#define SCENE_LEGACY_IRQ_COUNT 16U
 
 struct __attribute__((packed)) acpi_madt {
     struct scene_acpi_sdt_header header;
@@ -69,16 +70,16 @@ struct apic_discovery {
     uint64_t local_apic_address;
     uint64_t io_apic_address;
     uint32_t io_apic_gsi_base;
-    uint32_t timer_gsi;
-    uint16_t timer_flags;
+    uint32_t legacy_gsi[SCENE_LEGACY_IRQ_COUNT];
+    uint16_t legacy_flags[SCENE_LEGACY_IRQ_COUNT];
 };
 
 static volatile uint32_t *local_apic;
 static volatile uint32_t *io_apic;
 static uint32_t bootstrap_apic_id;
-static uint32_t timer_global_interrupt;
 static uint32_t io_apic_global_base;
-static uint16_t timer_override_flags;
+static uint32_t legacy_global_interrupts[SCENE_LEGACY_IRQ_COUNT];
+static uint16_t legacy_override_flags[SCENE_LEGACY_IRQ_COUNT];
 static bool apic_ready;
 
 static bool discover_apics(
@@ -100,10 +101,12 @@ static bool discover_apics(
     *discovery = (struct apic_discovery){
         .local_apic_address = madt->local_apic_address,
         .io_apic_address = 0,
-        .io_apic_gsi_base = 0,
-        .timer_gsi = 0,
-        .timer_flags = 0
+        .io_apic_gsi_base = 0
     };
+    for (uint32_t irq = 0; irq < SCENE_LEGACY_IRQ_COUNT; ++irq) {
+        discovery->legacy_gsi[irq] = irq;
+        discovery->legacy_flags[irq] = 0;
+    }
     const uint8_t *cursor = madt->entries;
     const uint8_t *end =
         (const uint8_t *)madt + madt->header.length;
@@ -129,9 +132,11 @@ static bool discover_apics(
         ) {
             const struct madt_interrupt_override *entry =
                 (const struct madt_interrupt_override *)(const void *)cursor;
-            if (entry->bus == 0U && entry->source == 0U) {
-                discovery->timer_gsi = entry->global_interrupt;
-                discovery->timer_flags = entry->flags;
+            if (entry->bus == 0U &&
+                entry->source < SCENE_LEGACY_IRQ_COUNT) {
+                discovery->legacy_gsi[entry->source] =
+                    entry->global_interrupt;
+                discovery->legacy_flags[entry->source] = entry->flags;
             }
         } else if (
             header->type == SCENE_ACPI_MADT_LOCAL_APIC_OVERRIDE &&
@@ -144,8 +149,7 @@ static bool discover_apics(
         cursor += header->length;
     }
     return discovery->local_apic_address != 0 &&
-        discovery->io_apic_address != 0 &&
-        discovery->timer_gsi >= discovery->io_apic_gsi_base;
+        discovery->io_apic_address != 0;
 }
 
 static uint64_t read_msr(uint32_t index) {
@@ -254,20 +258,26 @@ bool scene_arch_apic_init(const struct scene_boot_info *boot_info) {
         io_write(register_index, 1U << 16U);
     }
     bootstrap_apic_id = local_read(SCENE_LOCAL_APIC_ID) >> 24U;
-    timer_global_interrupt = discovery.timer_gsi;
-    timer_override_flags = discovery.timer_flags;
     io_apic_global_base = discovery.io_apic_gsi_base;
+    for (uint32_t irq = 0; irq < SCENE_LEGACY_IRQ_COUNT; ++irq) {
+        legacy_global_interrupts[irq] = discovery.legacy_gsi[irq];
+        legacy_override_flags[irq] = discovery.legacy_flags[irq];
+    }
     apic_ready = true;
     return true;
 }
 
-bool scene_arch_apic_route_timer(uint8_t vector) {
-    if (!apic_ready ||
-        timer_global_interrupt < io_apic_global_base) {
+bool scene_arch_apic_set_irq(
+    uint8_t irq,
+    uint8_t vector,
+    bool masked
+) {
+    if (!apic_ready || irq >= SCENE_LEGACY_IRQ_COUNT ||
+        legacy_global_interrupts[irq] < io_apic_global_base) {
         return false;
     }
     const uint32_t redirection =
-        timer_global_interrupt - io_apic_global_base;
+        legacy_global_interrupts[irq] - io_apic_global_base;
     const uint32_t version = io_read(SCENE_IO_APIC_VERSION);
     const uint32_t maximum_redirection = (version >> 16U) & 0xffU;
     if (redirection > maximum_redirection) {
@@ -275,13 +285,17 @@ bool scene_arch_apic_route_timer(uint8_t vector) {
     }
 
     uint32_t low = vector;
-    const uint16_t polarity = timer_override_flags & 0x03U;
-    const uint16_t trigger = (timer_override_flags >> 2U) & 0x03U;
+    const uint16_t flags = legacy_override_flags[irq];
+    const uint16_t polarity = flags & 0x03U;
+    const uint16_t trigger = (flags >> 2U) & 0x03U;
     if (polarity == 3U) {
         low |= 1U << 13U;
     }
     if (trigger == 3U) {
         low |= 1U << 15U;
+    }
+    if (masked) {
+        low |= 1U << 16U;
     }
     const uint8_t register_index = (uint8_t)(
         SCENE_IO_APIC_REDIRECTION_BASE + redirection * 2U
@@ -309,5 +323,5 @@ uint32_t scene_arch_apic_id(void) {
 }
 
 uint32_t scene_arch_apic_timer_gsi(void) {
-    return timer_global_interrupt;
+    return legacy_global_interrupts[0];
 }
