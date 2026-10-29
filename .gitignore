@@ -1,9 +1,44 @@
+# Project-local build output and downloaded dependencies
 /build/
 /.scene-sdk/
-/.vscode/settings.json
+/cmake-build-*/
+
+# Local CMake configuration and generated CMake/Ninja state
+/CMakeUserPresets.json
 /compile_commands.json
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+build.ninja
+.ninja_deps
+.ninja_log
+.ninja_lock
+/bin/
+*.o
+*.obj
+
+# Generated emulator media and logs
 *.iso
 *.hdd
+*.qcow2
 *.log
+
+# Python bytecode
 __pycache__/
 *.py[cod]
+
+# Local editor settings, indexes, and recovery files
+/.vscode/settings.json
+/.vs/
+/.idea/workspace.xml
+/.idea/tasks.xml
+/.idea/shelf/
+/.cache/clangd/
+*.swp
+*.swo
+*~
+
+# Host filesystem metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
