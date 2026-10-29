@@ -80,7 +80,10 @@ IOAPIC, and IRQ overrides from ACPI MADT, and routes the 100 Hz PIT IRQ to the
 BSP Local APIC on the default Q35 path. A shared ACPI lookup layer validates
 RSDP, XSDT/RSDT, and target tables. The core time layer prefers the 64-bit HPET
 main counter and falls back to a PIT-calibrated TSC, exposing either as
-nanosecond monotonic time. A fixed 32-entry min-heap timer queue supports
+nanosecond monotonic time. Both clock paths record the PIT-measured TSC
+frequency, CPUID.15H frequency, and invariant flag, comparing frequencies with
+a 5% tolerance. CPUID data is diagnostic only and does not override source
+selection or the measured frequency. A fixed 32-entry min-heap timer queue supports
 scheduling, cancellation, and due-callback dispatch outside IRQ context.
 The core IRQ layer now owns a fixed 16-entry legacy-line registry. The x86
 layer routes each attached line through its MADT override to the IOAPIC; PIT

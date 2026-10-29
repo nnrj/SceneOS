@@ -44,8 +44,9 @@ observable completion criteria.
   version complete)
 - PS/2 three-byte mouse packets and relative pointer events. (initial version
   complete)
-- CPUID/TSC frequency cross-checking, Local APIC timer evaluation, and dynamic
-  timer capacity.
+- CPUID/TSC frequency cross-checking, diagnostics, and boundary self-tests.
+  (initial version complete)
+- Local APIC timer evaluation and dynamic timer capacity.
 - Keyboard layout/text translation, wheel negotiation, and dynamic input
   capacity.
 

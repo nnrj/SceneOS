@@ -21,6 +21,7 @@ set(SCENEOS_KERNEL_SOURCES
     src/arch/x86_64/paging.c
     src/arch/x86_64/serial.c
     src/arch/x86_64/timer.c
+    src/arch/x86_64/tsc.c
     src/arch/x86_64/descriptors.asm
     src/arch/x86_64/exceptions.asm
     src/arch/x86_64/halt.asm
@@ -56,6 +57,11 @@ if(SCENEOS_FORCE_TSC_CLOCK)
     target_compile_definitions(scene-kernel PRIVATE
         SCENEOS_FORCE_TSC_CLOCK=1
     )
+endif()
+
+if(SCENEOS_CLOCK_SELF_TEST)
+    target_compile_definitions(scene-kernel PRIVATE SCENEOS_CLOCK_SELF_TEST=1)
+    target_sources(scene-kernel PRIVATE src/tests/clock.c)
 endif()
 
 if(SCENEOS_KEYBOARD_SELF_TEST)

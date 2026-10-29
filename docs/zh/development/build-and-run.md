@@ -78,6 +78,18 @@ Microsoft 授权内容，而 SceneOS 不应默认假设拥有该授权。检测�
 所有生成物位于 `build/<preset>/`。构建不复制文件到 `nnos`，不覆盖源文件，
 不写入虚拟机工具目录。
 
+移动仓库后，旧的 CMake 缓存仍可能引用原来的绝对路径。可在新仓库目录执行：
+
+```powershell
+python tools/scenectl.py build --preset dev --fresh
+python tools/scenectl.py build --preset release --fresh
+```
+
+`--fresh` 使用 CMake 的缓存重建机制，重建所选 preset 下的 `CMakeCache.txt`
+和 `CMakeFiles/`，然后重新配置和构建；不清理 `.scene-sdk/` 或历史日志。
+`configure` 也支持该选项。它会重置手动缓存配置，随后由当前 preset 和命令参数
+重新确定选项。日常构建不需要 `--fresh`。
+
 GitHub Actions 会在临时 Linux runner 中安装工具、构建 ISO，并通过 QEMU 串口
 执行启动冒烟测试。该 CI 环境与物理开发机隔离。
 
@@ -95,3 +107,7 @@ QEMU 串口应输出 `SceneOS kernel bootstrap`、GDT/TSS/IDT、bootloader、内
 对应的指针验收命令是 `python tools/scenectl.py smoke --mouse --timeout 10`。
 它通过 QEMU Monitor 发送相对移动，并要求 IRQ12 交付指针事件。两种输入自测都
 不会永久改变普通交互构建；下一次 configure 会显式选择本次所需选项。
+
+`python tools/scenectl.py smoke --clock-check --timeout 10` 验证 CPUID 频率
+解析和诊断边界；追加 `--tsc-clock` 可验证 TSC 回退与自测共存。日志中的真实
+CPU 诊断与人工输入的边界用例分开报告，详见[中断与时间](interrupts-and-time.md)。

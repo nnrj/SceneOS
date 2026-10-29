@@ -48,16 +48,36 @@ RSDP, XSDT/RSDT, every target-table checksum, and firmware-provided length
 bounds. Q35 exposes a 64-bit 100 MHz HPET; SceneOS maps its MMIO page, resets
 and enables the main counter, and selects it as the preferred monotonic source.
 
-Without a suitable HPET, the core clock waits for a PIT tick boundary and
-calibrates TSC frequency over eight ticks. `python tools/scenectl.py smoke
---tsc-clock` forces this fallback. QEMU currently does not advertise invariant
-TSC, so the fallback does not promise accuracy across CPUs, sleep, migration,
-or frequency-state changes.
+The core clock waits for a PIT tick boundary and measures TSC frequency over
+eight ticks. The HPET path uses this measurement for diagnostics; without a
+suitable HPET, it supplies the TSC fallback frequency. A failed measurement
+does not disable a working HPET. Initialization fails only when neither HPET
+nor a measured fallback is available. `python tools/scenectl.py smoke
+--tsc-clock` forces the fallback. The current default QEMU CPU does not
+advertise invariant TSC, so the fallback does not promise accuracy across
+CPUs, sleep, migration, or frequency-state changes.
+
+The architecture layer uses `ECX * EBX / EAX` as defined by
+[Intel SDM CPUID.15H](https://cdrdv2-public.intel.com/868137/325462-089-sdm-vol-1-2abcd-3abcd-4.pdf).
+It requires a supported leaf, nonzero denominator/numerator, and an enumerated
+crystal frequency. A 64-bit product avoids truncating the ratio first.
+Missing data returns zero; no model-specific crystal guess or CPUID.16H
+processor-base-frequency substitution is made.
+
+Diagnostics retain the reported frequency, PIT measurement, and invariant
+flag. Comparisons accept frequencies from 1 MHz through 10 GHz and use a
+50,000 ppm (5%) tolerance relative to the reported value, checking the limit
+before rounding the displayed ppm. Status is `unavailable`, `invalid frequency`,
+`unmeasured`, `within tolerance`, or `mismatch`. Missing CPUID frequency data
+does not block boot. Invalid reports or mismatches only warn; they never
+override HPET priority or the measured fallback frequency. One short sample
+and the invariant flag do not prove cross-CPU synchronization, migration
+safety, or long-term hardware accuracy.
 
 Both sources use the same quotient-and-remainder nanosecond conversion instead
 of directly multiplying `elapsed * 1,000,000,000`. The clock origin is source
-initialization, not boot or the Unix epoch. CPUID frequency cross-checking and
-Local APIC timer evaluation remain future work.
+initialization, not boot or the Unix epoch. Local APIC timer evaluation and
+longer-window clock accuracy checks remain future work.
 
 ## Early timer queue
 
@@ -78,6 +98,8 @@ does not assume that a number of IRQs equals exact wall-clock time.
 ```powershell
 python tools/scenectl.py smoke
 python tools/scenectl.py smoke --page-fault
+python tools/scenectl.py smoke --clock-check --timeout 10
+python tools/scenectl.py smoke --clock-check --tsc-clock --timeout 10
 ```
 
 The default test requires `Interrupt controller: Local APIC + IOAPIC`, the PIT
@@ -86,3 +108,11 @@ at least three hardware ticks, `Clock source: HPET`, and timer
 ordering/cancellation verification. `smoke --tsc-clock` requires
 `Clock source: calibrated TSC`. The page-fault test requires the default steps
 too, proving that exception and IRQ/time paths coexist.
+
+All modes except the early exception test also require TSC diagnostic fields.
+`--clock-check` adds a separate test translation unit covering missing leaves,
+zero fields, fractional ratios, wide products, both tolerance boundaries,
+missing measurements, and unsupported frequency ranges. Success emits
+`Clock diagnostic edge cases: verified`. The current default QEMU CPU exposes
+no usable CPUID.15H frequency, so its actual status is `unavailable`. Synthetic
+cases validate decoding and classification, not a physical CPU's frequency.

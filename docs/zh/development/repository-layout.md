@@ -9,6 +9,7 @@ kernel/src/arch       架构相关实现
 kernel/src/boot       启动协议适配
 kernel/src/core       内核基础设施
 kernel/src/graphics   当前 framebuffer 验证层
+kernel/src/tests      按自测构建选项启用的内核边界测试
 kernel/linker         架构链接脚本
 third_party/          固定来源和许可证的第三方内容
 tools/                构建、镜像、诊断和 bootstrap 编排

@@ -76,6 +76,20 @@ which SceneOS must not assume. `doctor` reports and ignores oscdimg when found.
 All generated output stays under `build/<preset>/`. The build does not copy
 into NNOS, overwrite source files, or write emulator installation folders.
 
+After relocating the repository, old CMake caches may still refer to absolute
+paths in the previous location. Run these commands from the new repository:
+
+```powershell
+python tools/scenectl.py build --preset dev --fresh
+python tools/scenectl.py build --preset release --fresh
+```
+
+`--fresh` uses CMake's cache regeneration to recreate `CMakeCache.txt` and
+`CMakeFiles/` for the selected preset, then configures and builds. It does not
+clean `.scene-sdk/` or historical logs. `configure` accepts this option too.
+Manually cached settings are reset; the current preset and command arguments
+determine the new configuration. Ordinary builds do not need `--fresh`.
+
 GitHub Actions installs tools in an ephemeral Linux runner, builds the ISO, and
 checks boot progress through the QEMU serial console. This CI environment is
 isolated from physical development machines.
@@ -98,3 +112,8 @@ pointer test. It sends relative motion through QEMU Monitor and requires an
 IRQ12-delivered pointer event. Neither input self-test changes the normal
 interactive build configuration permanently; the next configure selects the
 requested options explicitly.
+
+`python tools/scenectl.py smoke --clock-check --timeout 10` validates CPUID
+frequency decoding and diagnostic boundary cases. Add `--tsc-clock` to test
+the TSC fallback with these checks. Actual CPU diagnostics and synthetic edge
+cases are reported separately; see [interrupts and time](interrupts-and-time.md).

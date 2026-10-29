@@ -17,6 +17,10 @@
 #include <scene/timer.h>
 #include <scene/timer_queue.h>
 
+#if defined(SCENEOS_CLOCK_SELF_TEST)
+#include "tests/clock.h"
+#endif
+
 static uint32_t timer_callback_results[2];
 static size_t timer_callback_count;
 static const uint32_t timer_marker_first = 1U;
@@ -257,6 +261,34 @@ void kmain(void) {
         "Clock source frequency Hz: ",
         scene_clock_source_frequency_hz()
     );
+
+    struct scene_clock_diagnostics clock_diagnostics;
+    if (!scene_clock_get_diagnostics(&clock_diagnostics)) {
+        scene_panic("Clock diagnostics unavailable after initialization");
+    }
+    scene_log_line("TSC calibration reference: PIT");
+    scene_log_u64("TSC measured frequency Hz: ",
+        clock_diagnostics.tsc_measured_hz);
+    scene_log_u64("TSC CPUID frequency Hz: ",
+        clock_diagnostics.tsc_reported_hz);
+    scene_log_line(clock_diagnostics.tsc_invariant
+        ? "TSC invariant: yes" : "TSC invariant: no");
+    scene_log_write("TSC frequency check: ");
+    scene_log_line(scene_clock_tsc_check_name());
+    scene_log_u64("TSC frequency deviation ppm: ",
+        clock_diagnostics.tsc_deviation_ppm);
+    scene_log_u64("TSC frequency tolerance ppm: ",
+        SCENE_CLOCK_TSC_TOLERANCE_PPM);
+    if (clock_diagnostics.tsc_check == SCENE_CLOCK_TSC_MISMATCH ||
+        clock_diagnostics.tsc_check == SCENE_CLOCK_TSC_INVALID) {
+        scene_log_line("Warning: CPUID TSC frequency is not trusted");
+    }
+#if defined(SCENEOS_CLOCK_SELF_TEST)
+    if (!scene_clock_self_test()) {
+        scene_panic("Clock diagnostic edge-case test failed");
+    }
+    scene_log_line("Clock diagnostic edge cases: verified");
+#endif
 
     scene_timer_queue_init();
     timer_callback_count = 0;

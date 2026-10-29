@@ -14,6 +14,7 @@ uint64_t scene_arch_hpet_counter(void);
 uint64_t scene_arch_hpet_frequency_hz(void);
 uint64_t scene_arch_timestamp_counter(void);
 bool scene_arch_timestamp_counter_invariant(void);
+uint64_t scene_arch_timestamp_counter_frequency_hz(void);
 _Noreturn void scene_arch_halt_forever(void);
 
 #endif

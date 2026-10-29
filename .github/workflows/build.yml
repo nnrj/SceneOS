@@ -32,6 +32,12 @@ jobs:
       - name: Validate calibrated-TSC clock fallback
         run: python3 tools/scenectl.py smoke --tsc-clock --timeout 8
 
+      - name: Validate clock diagnostic edge cases with HPET
+        run: python3 tools/scenectl.py smoke --clock-check --timeout 10
+
+      - name: Validate clock diagnostic edge cases with TSC
+        run: python3 tools/scenectl.py smoke --clock-check --tsc-clock --timeout 10
+
       - name: Validate page-fault diagnostics
         run: python3 tools/scenectl.py smoke --page-fault --timeout 8
 

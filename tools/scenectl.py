@@ -323,15 +323,23 @@ def command_configure(arguments: argparse.Namespace) -> None:
     force_tsc_clock = (
         "ON" if getattr(arguments, "tsc_clock", False) else "OFF"
     )
+    clock_test = "ON" if getattr(arguments, "clock_check", False) else "OFF"
+    configure_options = []
+    if getattr(arguments, "fresh", False):
+        # Validate the destination before CMake removes its generated cache.
+        checked_build_directory(arguments.preset)
+        configure_options.append("--fresh")
     run(
         [
             cmake,
+            *configure_options,
             "--preset", arguments.preset,
             f"-DSCENEOS_EXCEPTION_SELF_TEST={self_test}",
             f"-DSCENEOS_PAGE_FAULT_SELF_TEST={page_fault_test}",
             f"-DSCENEOS_KEYBOARD_SELF_TEST={keyboard_test}",
             f"-DSCENEOS_MOUSE_SELF_TEST={mouse_test}",
             f"-DSCENEOS_FORCE_TSC_CLOCK={force_tsc_clock}",
+            f"-DSCENEOS_CLOCK_SELF_TEST={clock_test}",
         ],
         environment=environment,
     )
@@ -380,6 +388,8 @@ def find_limine_host_tool(package: Path) -> Path:
 
 
 def checked_build_directory(preset: str) -> Path:
+    if BUILD_ROOT.resolve() != ROOT / "build":
+        raise SceneCtlError("build root must not redirect outside the repository")
     directory = (BUILD_ROOT / preset).resolve()
     if not directory.is_relative_to(BUILD_ROOT.resolve()):
         raise SceneCtlError("invalid build directory")
@@ -733,6 +743,17 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "Kernel heap allocated bytes: 0",
             "Bootstrap complete",
         )
+    if not arguments.exception:
+        expected += (
+            "TSC calibration reference: PIT",
+            "TSC measured frequency Hz:",
+            "TSC CPUID frequency Hz:",
+            "TSC invariant:",
+            "TSC frequency check:",
+            "TSC frequency tolerance ppm: 50000",
+        )
+    if arguments.clock_check:
+        expected += ("Clock diagnostic edge cases: verified",)
     missing = [text for text in expected if text not in output]
     if missing:
         raise SceneCtlError(
@@ -778,6 +799,12 @@ def parser() -> argparse.ArgumentParser:
     ):
         command = subcommands.add_parser(name)
         command.add_argument("--preset", choices=("dev", "release"), default="dev")
+        if name in ("configure", "build"):
+            command.add_argument(
+                "--fresh",
+                action="store_true",
+                help="regenerate CMake cache after moving the repository",
+            )
         if name == "image":
             command.add_argument(
                 "--image-tool",
@@ -809,6 +836,11 @@ def parser() -> argparse.ArgumentParser:
     smoke.add_argument("--preset", choices=("dev", "release"), default="dev")
     smoke.add_argument("--timeout", type=int, default=10)
     fault_tests = smoke.add_mutually_exclusive_group()
+    fault_tests.add_argument(
+        "--clock-check",
+        action="store_true",
+        help="validate CPUID decoding and clock diagnostic boundary cases",
+    )
     fault_tests.add_argument(
         "--exception",
         action="store_true",

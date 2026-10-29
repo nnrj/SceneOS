@@ -9,6 +9,7 @@ kernel/src/arch       architecture-specific implementation
 kernel/src/boot       boot protocol adapters
 kernel/src/core       kernel foundations
 kernel/src/graphics   current framebuffer validation layer
+kernel/src/tests      kernel edge cases enabled by self-test build options
 kernel/linker         architecture linker scripts
 third_party/          pinned third-party sources and provenance
 tools/                build, image, diagnosis, and bootstrap orchestration

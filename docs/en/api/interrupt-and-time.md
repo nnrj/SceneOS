@@ -51,18 +51,40 @@ not call it directly.
 ## Monotonic clock
 
 - `scene_clock_init(boot_info, calibration_ticks)` prefers ACPI HPET and
-  calibrates the TSC against PIT ticks when HPET is unavailable.
-- `scene_clock_ready()` reports whether calibration completed.
+  measures TSC against PIT ticks for diagnostics; without HPET, that measured
+  frequency supplies the fallback.
+- `scene_clock_ready()` reports whether the selected source is ready.
 - `scene_clock_source_name()` returns `HPET` or `calibrated TSC`.
 - `scene_clock_source_stable()` returns `true` for HPET and follows the CPU's
   invariant-TSC declaration for the fallback.
 - `scene_clock_source_frequency_hz()` returns the active source frequency.
 - `scene_clock_monotonic_ns()` returns nanoseconds from the calibration origin.
+- `scene_clock_get_diagnostics(out)` copies the initialization diagnostic
+  snapshot. An unready clock or null pointer returns `false` without writing.
+- `scene_clock_tsc_check_name()` returns the diagnostic string for the current
+  TSC frequency comparison status.
+
+`scene_clock_diagnostics` contains `tsc_reported_hz`, `tsc_measured_hz`,
+`tsc_deviation_ppm`, `tsc_invariant`, and `tsc_check`. The reported frequency
+comes from `scene_arch_timestamp_counter_frequency_hz()`; missing CPUID.15H
+or required fields produce zero. A zero measured frequency means PIT
+measurement failed. The caller owns the copied snapshot, not internal state.
+
+`tsc_check` distinguishes `UNAVAILABLE` (no report), `INVALID` (a nonzero
+frequency outside 1 MHz–10 GHz), `UNMEASURED` (a valid report but no measurement),
+`MATCH`, and `MISMATCH`, all prefixed with `SCENE_CLOCK_TSC_`. Deviation is
+meaningful only for the last two states and is rounded down for display;
+classification compares before rounding. `SCENE_CLOCK_TSC_TOLERANCE_PPM` is
+50,000 ppm (5%), relative to the reported frequency. This status is diagnostic
+only and never changes clock selection.
 
 The value is not a wall clock and contains no date or timezone. Only a 64-bit
 HPET main counter is currently accepted. On a non-invariant TSC, the value only
 promises non-decreasing readings during the current BSP run, not long-term
 rate accuracy.
+The invariant check in `scene_clock_source_stable()` and frequency comparison
+describe different properties; one boolean cannot replace the full snapshot.
+TSC measurement failure does not fail initialization when HPET is available.
 
 ## Timer queue
 

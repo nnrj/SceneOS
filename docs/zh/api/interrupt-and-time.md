@@ -41,17 +41,33 @@ vector 或 GSI。一个 line 只能注册一个 handler；接口尚未提供共�
 
 ## 单调时钟
 
-- `scene_clock_init(boot_info, calibration_ticks)`：优先初始化 ACPI HPET；不可用
-  时用 PIT tick 校准 TSC。
-- `scene_clock_ready()`：报告校准是否完成。
+- `scene_clock_init(boot_info, calibration_ticks)`：优先初始化 ACPI HPET，并用
+  PIT tick 测量 TSC 用于诊断；HPET 不可用时使用该实测频率回退。
+- `scene_clock_ready()`：报告所选时钟源是否就绪。
 - `scene_clock_source_name()`：返回 `HPET` 或 `calibrated TSC`。
 - `scene_clock_source_stable()`：HPET 返回 `true`；TSC 取决于 CPU 是否声明
   invariant TSC。
 - `scene_clock_source_frequency_hz()`：返回当前来源频率。
 - `scene_clock_monotonic_ns()`：返回从校准原点开始的纳秒数。
+- `scene_clock_get_diagnostics(out)`：复制本次初始化的诊断快照；时钟未就绪或
+  参数为空时返回 `false`，不写入目标。
+- `scene_clock_tsc_check_name()`：返回当前 TSC 交叉校验状态的诊断字符串。
+
+`scene_clock_diagnostics` 包含 `tsc_reported_hz`、`tsc_measured_hz`、
+`tsc_deviation_ppm`、`tsc_invariant` 和 `tsc_check`。声明频率来自架构层的
+`scene_arch_timestamp_counter_frequency_hz()`；缺失 CPUID.15H 或必需字段时
+为零，实测频率为零表示 PIT 测量失败。快照由调用方持有，不暴露内部可变状态。
+
+`tsc_check` 区分 `UNAVAILABLE`（无声明）、`INVALID`（非零频率超出
+1 MHz–10 GHz）、`UNMEASURED`（有合格声明但无测量）、`MATCH` 和 `MISMATCH`。
+枚举前缀均为 `SCENE_CLOCK_TSC_`。偏差字段仅对后两者有意义；其值向下取整，
+但分类在取整前比较。容差由 `SCENE_CLOCK_TSC_TOLERANCE_PPM` 定义为 50,000
+ppm（5%），以声明频率为基准。该状态只用于诊断，不改变时钟选择。
 
 返回值不代表 wall clock，也不含时区或日期。当前只接受 64 位 HPET 主计数器；
 非 invariant TSC 上只保证当前 BSP 运行期间读数不倒退，不保证长期速率准确。
+`scene_clock_source_stable()` 的 invariant 判定与频率交叉校验是不同维度，
+不能用一个布尔值替代完整诊断。HPET 可用时，TSC 测量失败不会使初始化失败。
 
 ## 定时器队列
 

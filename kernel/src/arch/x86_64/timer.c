@@ -48,35 +48,6 @@ uint64_t scene_timer_ticks(void) {
     return elapsed_ticks;
 }
 
-uint64_t scene_arch_timestamp_counter(void) {
-    uint32_t low;
-    uint32_t high;
-    __asm__ volatile ("rdtsc" : "=a"(low), "=d"(high));
-    return ((uint64_t)high << 32U) | low;
-}
-
-bool scene_arch_timestamp_counter_invariant(void) {
-    uint32_t eax = 0x80000000U;
-    uint32_t ebx;
-    uint32_t ecx;
-    uint32_t edx;
-    __asm__ volatile (
-        "cpuid"
-        : "+a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
-    );
-    if (eax < 0x80000007U) {
-        return false;
-    }
-    eax = 0x80000007U;
-    __asm__ volatile (
-        "cpuid"
-        : "+a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
-    );
-    (void)ebx;
-    (void)ecx;
-    return (edx & (1U << 8U)) != 0;
-}
-
 bool scene_timer_wait_ticks(uint64_t tick_count) {
     const uint64_t initial_ticks = elapsed_ticks;
     const uint64_t watchdog_start = scene_arch_timestamp_counter();
