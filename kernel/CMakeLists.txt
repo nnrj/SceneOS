@@ -6,6 +6,7 @@ set(SCENEOS_KERNEL_SOURCES
     src/core/irq.c
     src/core/log.c
     src/core/local_timer.c
+    src/core/text_input.c
     src/core/timer_queue.c
     src/memory/heap.c
     src/memory/physical.c
@@ -78,6 +79,11 @@ if(SCENEOS_KEYBOARD_SELF_TEST)
     target_compile_definitions(scene-kernel PRIVATE
         SCENEOS_KEYBOARD_SELF_TEST=1
     )
+endif()
+
+if(SCENEOS_TEXT_INPUT_SELF_TEST)
+    target_compile_definitions(scene-kernel PRIVATE SCENEOS_TEXT_INPUT_SELF_TEST=1)
+    target_sources(scene-kernel PRIVATE src/tests/text_input.c)
 endif()
 
 if(SCENEOS_MOUSE_SELF_TEST)

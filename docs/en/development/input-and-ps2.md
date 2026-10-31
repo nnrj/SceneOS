@@ -22,11 +22,24 @@ initialization instead of hanging forever. The interrupt handler drains up to
 extended keys, tracks left/right modifiers and Caps Lock, and publishes key
 press, release, and repeat events.
 
-The driver deliberately does not produce characters. Keyboard layout,
-Shift/Caps behavior, Unicode composition, dead keys, and input methods belong
-to a later text-input service above semantic key events. Current limitations
-also include no Pause/Print Screen sequences, LEDs, hot-plug recovery, or
-multiple keyboards.
+The driver deliberately does not produce characters. In ordinary consumer
+context, `core/text_input.c` applies an explicit US layout to semantic presses,
+producing `scene_text_event` with the source sequence and repeat flag. Letters
+use Shift XOR Caps; only Shift affects digits/punctuation. Ctrl/Alt chords,
+releases, and editing/navigation keys produce no text. Translation reads the
+event's modifier snapshot without maintaining a second key-state tracker,
+running inside IRQs, or adding a producer to the raw ring queue. The consumer
+owns the resulting text.
+
+The initial layout covers 26 letters, ten digits, US punctuation, and space,
+emitting the printable ASCII subset of Unicode scalars. A separate UTF-8
+encoder supports 1–4 byte scalar encoding and rejects surrogates, out-of-range
+values, and insufficient buffers without partial writes. It follows
+[RFC 3629](https://www.rfc-editor.org/rfc/rfc3629) and performs no normalization,
+UTF-8 decoding, or input-method processing. Unicode composition, dead keys,
+AltGr, more layouts, and input methods remain future text-service work. PS/2
+still lacks Pause/Print Screen sequences, LEDs, hot-plug recovery, and multiple
+keyboards.
 
 The shared controller layer enables both i8042 ports and verifies whether each
 command response came from the requested device. The mouse enables defaults
@@ -42,3 +55,29 @@ device, IRQ1 route, decoder, and queue as one path.
 Use `python tools/scenectl.py smoke --mouse --timeout 10` to inject relative
 motion and prove the second controller port, IRQ12 route, packet decoder, and
 pointer-event path.
+
+Text-path acceptance:
+
+```powershell
+python tools/scenectl.py smoke --text-input --timeout 15
+python tools/scenectl.py smoke --text-input --pic --timeout 15
+python tools/scenectl.py smoke --text-input --tsc-clock --timeout 15
+python tools/scenectl.py smoke --preset release --text-input --timeout 15
+```
+
+A separate self-test unit first checks every letter/modifier combination,
+symbols/Caps, repeat, non-text keys, and unchanged output on invalid arguments.
+UTF-8 checks cover length boundaries, Chinese/supplementary-plane values,
+surrogates, and short buffers. The runner then injects 15 key groups through
+[QEMU Monitor](https://www.qemu.org/docs/master/system/monitor.html), including
+left/right Shift, Caps toggles, Ctrl/Alt chords, space, Enter, Backspace, and an
+extended arrow key. Each group must finish all presses/releases before the
+guest emits the next readiness marker. The runner matches whole serial lines
+before sending each command, so steps 1 and 10 cannot be confused.
+
+Success requires `aAAa!b Z`, exactly eight text events, correct source sequences,
+ordered raw events, and no queue loss. IRQ/device drivers still publish only
+raw events; the test consumes them and calls the translator. Missing markers,
+kernel faults, early process exit, or timeout fail the test and clean up its
+QEMU process. Normal builds do not enable this test and still offer no visible
+text-box or terminal input feedback.

@@ -65,6 +65,18 @@ jobs:
       - name: Validate mouse through cascaded legacy PIC
         run: python3 tools/scenectl.py smoke --mouse --pic --timeout 10
 
+      - name: Validate keyboard text and UTF-8
+        run: python3 tools/scenectl.py smoke --text-input --timeout 15
+
+      - name: Validate keyboard text through legacy PIC
+        run: python3 tools/scenectl.py smoke --text-input --pic --timeout 15
+
+      - name: Validate keyboard text with the TSC clock
+        run: python3 tools/scenectl.py smoke --text-input --tsc-clock --timeout 15
+
+      - name: Validate keyboard text in Release
+        run: python3 tools/scenectl.py smoke --preset release --text-input --timeout 15
+
       - name: Build bootable image
         run: python3 tools/scenectl.py image
 

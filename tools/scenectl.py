@@ -319,6 +319,7 @@ def command_configure(arguments: argparse.Namespace) -> None:
     keyboard_test = (
         "ON" if getattr(arguments, "keyboard", False) else "OFF"
     )
+    text_input_test = "ON" if getattr(arguments, "text_input", False) else "OFF"
     mouse_test = "ON" if getattr(arguments, "mouse", False) else "OFF"
     force_tsc_clock = (
         "ON" if getattr(arguments, "tsc_clock", False) else "OFF"
@@ -339,6 +340,7 @@ def command_configure(arguments: argparse.Namespace) -> None:
             f"-DSCENEOS_EXCEPTION_SELF_TEST={self_test}",
             f"-DSCENEOS_PAGE_FAULT_SELF_TEST={page_fault_test}",
             f"-DSCENEOS_KEYBOARD_SELF_TEST={keyboard_test}",
+            f"-DSCENEOS_TEXT_INPUT_SELF_TEST={text_input_test}",
             f"-DSCENEOS_MOUSE_SELF_TEST={mouse_test}",
             f"-DSCENEOS_FORCE_TSC_CLOCK={force_tsc_clock}",
             f"-DSCENEOS_CLOCK_SELF_TEST={clock_test}",
@@ -589,7 +591,9 @@ def command_smoke(arguments: argparse.Namespace) -> None:
         "-no-shutdown",
         "-drive", f"format=raw,file=fat:rw:{image_root.as_posix()}",
     ]
-    interactive_input_test = arguments.keyboard or arguments.mouse
+    interactive_input_test = (
+        arguments.keyboard or arguments.mouse or arguments.text_input
+    )
     if interactive_input_test:
         command.extend(["-monitor", "stdio"])
     print("+", " ".join(command))
@@ -603,37 +607,48 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             text=True,
         )
         deadline = time.monotonic() + arguments.timeout
-        marker = (
-            "Waiting for injected PS/2 key A"
-            if arguments.keyboard
-            else "Waiting for injected PS/2 mouse motion"
-        )
-        while process.poll() is None and time.monotonic() < deadline:
-            if serial_log.is_file():
-                current = serial_log.read_text(
-                    encoding="utf-8", errors="replace"
-                )
-                if marker in current:
-                    break
-            time.sleep(0.05)
-        if process.poll() is None and process.stdin is not None:
-            try:
-                monitor_command = (
-                    "sendkey a\n"
-                    if arguments.keyboard
-                    else "mouse_move 12 7\n"
-                )
+        if arguments.text_input:
+            # Match tests/text_input.c. The guest acknowledges every release
+            # before the next chord, so modifiers cannot leak between steps.
+            keys = (
+                "a", "shift-a", "caps_lock", "a", "shift-a", "shift-1",
+                "ctrl-a", "alt-a", "caps_lock", "b", "spc", "ret",
+                "backspace", "up", "shift_r-z",
+            )
+            injections = tuple(
+                (f"Waiting for text input step: {index}", f"sendkey {key} 30\n")
+                for index, key in enumerate(keys)
+            )
+        elif arguments.keyboard:
+            injections = (("Waiting for injected PS/2 key A", "sendkey a\n"),)
+        else:
+            injections = (("Waiting for injected PS/2 mouse motion", "mouse_move 12 7\n"),)
+        try:
+            for marker, monitor_command in injections:
+                ready = False
+                while process.poll() is None and time.monotonic() < deadline:
+                    if serial_log.is_file():
+                        current = serial_log.read_text(
+                            encoding="utf-8", errors="replace"
+                        )
+                        if "[PANIC]" in current or "[EXCEPTION]" in current:
+                            raise SceneCtlError("kernel fault during input injection")
+                        if marker in current.splitlines():
+                            ready = True
+                            break
+                    time.sleep(0.05)
+                if not ready or process.stdin is None:
+                    raise SceneCtlError(f"kernel did not reach input marker: {marker}")
                 process.stdin.write(monitor_command)
                 process.stdin.flush()
-            except (BrokenPipeError, OSError):
-                pass
-        remaining = max(0.1, deadline - time.monotonic())
-        try:
+            remaining = max(0.1, deadline - time.monotonic())
             process.wait(timeout=remaining)
         except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
+            pass
         finally:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
             if process.stdin is not None:
                 process.stdin.close()
     else:
@@ -760,6 +775,16 @@ def command_smoke(arguments: argparse.Namespace) -> None:
         )
     if arguments.clock_check:
         expected += ("Clock diagnostic edge cases: verified",)
+    if arguments.text_input:
+        expected += (
+            "Text layout edge cases: verified",
+            "UTF-8 scalar boundaries: verified",
+            "PS/2 text sequence: aAAa!b Z",
+            "PS/2 text event count: 8",
+            "Input events dropped: 0",
+            "Text key presses/releases and shortcuts: verified",
+            "PS/2 text input: verified",
+        )
     if arguments.lapic_timer:
         expected += ("Local timer arithmetic boundaries: verified",)
         if not arguments.tsc_clock:
@@ -861,6 +886,11 @@ def parser() -> argparse.ArgumentParser:
     smoke.add_argument("--preset", choices=("dev", "release"), default="dev")
     smoke.add_argument("--timeout", type=int, default=10)
     fault_tests = smoke.add_mutually_exclusive_group()
+    fault_tests.add_argument(
+        "--text-input",
+        action="store_true",
+        help="validate US layout, Unicode/UTF-8, and injected PS/2 text",
+    )
     fault_tests.add_argument(
         "--lapic-timer",
         action="store_true",

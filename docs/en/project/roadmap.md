@@ -51,8 +51,10 @@ observable completion criteria.
   (initial optional evaluation complete; PIT remains the default)
 - Local APIC timer scheduling/wakeup integration, power-state validation,
   and dynamic timer capacity.
-- Keyboard layout/text translation, wheel negotiation, and dynamic input
-  capacity.
+- Minimal US keyboard layout, Shift/Caps rules, derived Unicode text events,
+  and UTF-8 encoding. (initial version complete, on the input consumer side)
+- More layouts, input methods/composition, wheel negotiation, and dynamic
+  input capacity.
 
 ## M3: threads, processes, and user space
 

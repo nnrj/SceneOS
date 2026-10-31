@@ -113,6 +113,16 @@ IRQ12-delivered pointer event. Neither input self-test changes the normal
 interactive build configuration permanently; the next configure selects the
 requested options explicitly.
 
+Run `python tools/scenectl.py smoke --text-input --timeout 15` for text
+translation. It checks US layout/UTF-8 boundaries, injects key groups, and
+requires `aAAa!b Z` with no queue loss. Add `--pic`, `--tsc-clock`, or
+`--preset release` for compatibility/optimized paths. `--text-input` is mutually
+exclusive with other focused self-tests; `SCENEOS_TEXT_INPUT_SELF_TEST` defaults
+to OFF. Input injection follows serial readiness markers and cleans up its
+QEMU process on faults or failed waits. A normal `build` or `smoke` disables all
+self-tests; direct `cmake --build` retains the cached configuration. See
+[input core and PS/2](input-and-ps2.md).
+
 `python tools/scenectl.py smoke --clock-check --timeout 10` validates CPUID
 frequency decoding and diagnostic boundary cases. Add `--tsc-clock` to test
 the TSC fallback with these checks. Actual CPU diagnostics and synthetic edge

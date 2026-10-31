@@ -16,16 +16,16 @@
    git log -5 --oneline
    ```
 
-3. 预期分支为 `master`，本轮开发开始时的基准 HEAD 为：
+3. 预期分支为 `master`，本次文本层开发的基准提交为（最新 HEAD 以 Git 为准）：
 
    ```text
-   f094ef3 update
+   7e3c674 feat: add BSP local timer and harden PIT/PIC paths
    ```
 
-   用户已提交并推送此前的迁移恢复、时钟诊断和 Git 忽略规则改动，本轮开始时
-   工作树干净，`master` 与本地记录的 `origin/master` 一致。2026-10-31 新增
-   Local APIC timer 与 PIC/PIT 修复的实现与验证见下文；提交与工作树状态以
-   实际 Git 为准。用户已授权完成验证后分阶段本地提交，不推送远端。
+   用户已推送此前的迁移恢复、时钟诊断和 Git 忽略规则改动（`f094ef3`）。
+   Local APIC timer 与 PIC/PIT 修复已提交为 `7e3c674`；随后开展文本输入阶段，
+   实现与验证见下文。用户已授权完成验证后执行 `git add .` 和 `git commit`
+   保存阶段性成果，不推送远端。提交与工作树状态以实际 Git 为准。
 
 4. 先阅读本文以及：
 
@@ -99,14 +99,18 @@
 - PS/2 Set 1 键盘：IRQ1、语义键码、左右修饰键、Caps Lock、按下/释放/重复。
 - PS/2 三字节鼠标：IRQ12、相对移动、左/右/中键当前值和变化掩码。
 - 固定容量统一输入事件队列，带序列号和丢失计数。
+- 消费者侧最小 US 键盘布局、Shift/Caps 规则、Ctrl/Alt 文本抑制、派生 Unicode
+  文本事件及 UTF-8 编码；文本携带原始事件序列号与重复标志，不回写硬件队列。
 
 当前输入队列依赖单 BSP、可屏蔽中断 handler 不嵌套和 x86 有序内存模型，尚不
-是 SMP 安全通用队列。键盘布局、Unicode 文本转换、输入法、鼠标滚轮协商、
-绝对坐标设备、焦点路由和多消费者分发尚未实现。
+是 SMP 安全通用队列。更多布局、死键/AltGr、输入法与组合文本、鼠标滚轮协商、
+绝对坐标设备、焦点路由和多消费者分发尚未实现。普通启动没有文本框或终端，
+文本转换目前由独立验收消费者使用；UTF-8 编码能力不等于中文输入法已完成。
 
 ## 最近关键提交
 
 ```text
+7e3c674 feat: add BSP local timer and harden PIT/PIC paths
 f094ef3 update
 c8a57cb update
 22cae93 feat: add PS/2 mouse input pipeline
@@ -211,18 +215,52 @@ python tools/scenectl.py smoke --mouse --timeout 10
 - CI 与中英文项目/开发/API 文档已同步。
 - 短采样只用于初期评估；长期精度、ARAT/深度省电、SMP、TSC-deadline 和
   调度/睡眠唤醒集成尚未验证或实现。远端 CI、ISO 与真机本轮未运行。
-- 本阶段已具备提交条件；用户已授权阶段性本地提交，提交记录以 Git 为准。
-  未推送远端。
+- 本阶段已本地提交为 `7e3c674`，未推送远端。
+
+### 2026-10-31 键盘布局与文本输入
+
+- 新增 `scene/text_input.h` 与 `core/text_input.c`。转换是消费者调用的纯函数，
+  当前仅支持显式 US 布局；不修改 PS/2 驱动或原始输入队列结构。
+- 字母使用 Shift/Caps 异或，数字与标点只受 Shift 影响，保留重复与来源序列。
+  Ctrl/Alt、释放、编辑/导航动作不产生文本；无效参数不修改输出。UTF-8 编码
+  支持合法 Unicode 标量，拒绝代理码点、越界值和短缓冲区，且不附加终止符。
+- `smoke --text-input --timeout 15` 增加独立自测：字母/修饰键组合、符号与重复、
+  错误参数、UTF-8 标量与容量边界；QEMU Monitor 按就绪标记注入 15 组按下/
+  释放动作，要求文本 `aAAa!b Z`、八个文本事件、正确来源序列和零丢失。
+- 输入注入改为完整串口行匹配，避免步骤 1/10 冲突；未就绪不发送，错误退出时
+  清理本次 QEMU。新增 `SCENEOS_TEXT_INPUT_SELF_TEST` 默认 OFF，普通配置显式
+  重置为 OFF。CI 已增加 APIC、PIC、TSC 与 Release 文本验收步骤。
+- 本阶段日志放在 `build/verify/text-input-20261031/`。14 组 QEMU 验收全部通过：
+
+  | 配置 | 验证路径 | 组数 |
+  | --- | --- | --- |
+  | Dev | `--text-input`，分别使用默认 HPET、`--pic`、`--tsc-clock` | 3 |
+  | Release | `--text-input`，分别使用默认 APIC、`--pic` | 2 |
+  | Dev | `--keyboard`、`--mouse`，分别使用 APIC、`--pic` | 4 |
+  | Dev | `--page-fault`、`--clock-check --tsc-clock`、`--lapic-timer` | 3 |
+  | Dev / Release | 普通 `smoke` | 2 |
+
+- 文本用例使用 `--timeout 15`，其余用例为 10 秒；各次命令和串口输出分别保存
+  为 `*-run.log` / `*-serial.log`。五个文本路径都完成 15 组按下/释放，产生相同
+  的八字符结果且队列零丢失。重复标志与非 ASCII 标量的编码由合成边界用例覆盖。
+- 单独强制未达到注入标记的超时失败，验证本次启动的 QEMU 被回收、stdin 关闭；
+  使用现有镜像，不改变正常构建缓存，日志在 `negative-timeout/result.log`。
+- 最后的 Dev/Release 普通 smoke 通过；两套缓存共各 9 个自测/强制开关均 OFF。
+  Python 语法、文本模式参数组合/互斥、双语文档结构及内部链接、`git diff --check`
+  检查通过。原始输入队列与 PS/2 驱动未改，NNOS 的历史产物保持原状态。
+- 中英文项目/开发/API 文档同步；此阶段不包含 GUI 文本控件、中文输入法、
+  UTF-8 解码、Unicode 规范化、真机或远端 CI 验证。
+- 按用户授权在完成验证后本地提交本阶段成果；提交记录以 Git 为准，不 push。
 
 ## 建议下一步
 
 优先继续 M2，不要过早进入完整桌面：
 
-1. 在输入核心上增加最小键盘布局与按键到 Unicode/文本事件的转换层，但不要把
-   布局逻辑放进 PS/2 驱动。
-2. 增加 PS/2 IntelliMouse 滚轮协商与四字节包测试。
-3. 随后再决定进入 M3（线程/用户态）还是先做一个仅内核期的可见光标原型；正式
+1. 增加 PS/2 IntelliMouse 滚轮协商与四字节包测试。
+2. 随后再决定进入 M3（线程/用户态）还是先做一个仅内核期的可见光标原型；正式
    窗口系统仍应按路线图置于用户态。
+3. 文本消费者/终端形成时，再按交互需要选择布局、焦点和编辑动作策略；不把
+   输入法、组合文本或布局规则放入 PS/2 驱动。
 4. 进入调度/唤醒阶段时，再将本地定时器接入时钟事件源选择与 deadline 编程；
    当前保留 PIT 默认路径，不因可选自测通过就承诺跨 CPU 或电源状态可靠性。
 

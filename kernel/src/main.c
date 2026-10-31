@@ -24,6 +24,9 @@
 #include <scene/local_timer.h>
 #include "tests/local_timer.h"
 #endif
+#if defined(SCENEOS_TEXT_INPUT_SELF_TEST)
+#include "tests/text_input.h"
+#endif
 
 static uint32_t timer_callback_results[2];
 static size_t timer_callback_count;
@@ -483,6 +486,12 @@ void kmain(void) {
         scene_panic("PS/2 keyboard input self-test timed out");
     }
     scene_log_line("PS/2 key A press: verified");
+#endif
+
+#if defined(SCENEOS_TEXT_INPUT_SELF_TEST)
+    if (!scene_text_input_self_test()) {
+        scene_panic("Text input self-test failed");
+    }
 #endif
 
     scene_log_line("Bootstrap complete. Halting the bootstrap processor.");

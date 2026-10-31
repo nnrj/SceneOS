@@ -13,6 +13,7 @@ option(SCENEOS_CLOCK_SELF_TEST "Validate clock diagnostic edge cases" OFF)
 option(SCENEOS_LOCAL_TIMER_SELF_TEST "Validate BSP local timer delivery" OFF)
 option(SCENEOS_FORCE_PIC "Keep the legacy PIC path for compatibility tests" OFF)
 option(SCENEOS_KEYBOARD_SELF_TEST "Wait for an injected PS/2 A key" OFF)
+option(SCENEOS_TEXT_INPUT_SELF_TEST "Validate key-to-text translation and UTF-8" OFF)
 option(SCENEOS_MOUSE_SELF_TEST "Wait for injected PS/2 mouse motion" OFF)
 
 add_subdirectory(kernel)

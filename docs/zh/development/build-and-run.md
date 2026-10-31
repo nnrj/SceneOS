@@ -108,6 +108,14 @@ QEMU 串口应输出 `SceneOS kernel bootstrap`、GDT/TSS/IDT、bootloader、内
 它通过 QEMU Monitor 发送相对移动，并要求 IRQ12 交付指针事件。两种输入自测都
 不会永久改变普通交互构建；下一次 configure 会显式选择本次所需选项。
 
+文本转换验收使用 `python tools/scenectl.py smoke --text-input --timeout 15`。
+它先验证 US 布局和 UTF-8 边界，再逐组注入按键，要求文本为 `aAAa!b Z` 且队列
+无丢失。可追加 `--pic`、`--tsc-clock` 或 `--preset release` 验证兼容/优化路径。
+`--text-input` 与其他专项自测互斥；`SCENEOS_TEXT_INPUT_SELF_TEST` 默认 OFF。
+输入注入按串口就绪标记推进，异常或等待失败会清理本次 QEMU。普通 `build` 或
+`smoke` 会关闭所有自测开关；直接 `cmake --build` 保留当前缓存配置。详情见
+[输入核心与 PS/2](input-and-ps2.md)。
+
 `python tools/scenectl.py smoke --clock-check --timeout 10` 验证 CPUID 频率
 解析和诊断边界；追加 `--tsc-clock` 可验证 TSC 回退与自测共存。日志中的真实
 CPU 诊断与人工输入的边界用例分开报告，详见[中断与时间](interrupts-and-time.md)。

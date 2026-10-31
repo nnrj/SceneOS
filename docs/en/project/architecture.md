@@ -97,8 +97,13 @@ scheduling/wakeup integration, dynamic queue capacity, and shared IRQ handlers
 remain pending. The
 input core adds a hardware-neutral semantic key-event queue. The initial i8042
 driver configures PS/2 translation, consumes Set 1 bytes on IRQ1, tracks key
-state and modifiers, and publishes press/release/repeat events. Text and layout
-translation stay above this device layer. A shared i8042 controller layer also
+state and modifiers, and publishes press/release/repeat events. Above the device
+layer, a stateless consumer-side module applies a minimal US layout, retains
+raw key events and source sequence numbers, handles Shift/Caps, repeat, and
+Ctrl/Alt suppression, and encodes Unicode scalars as UTF-8. It generates no
+characters inside IRQ handlers and never writes text back into the raw input
+queue. More layouts, dead keys, input methods, and composition remain pending.
+A shared i8042 controller layer also
 enables the second port; the mouse driver consumes three-byte packets on IRQ12
 and publishes relative motion and button-change state. Wheel negotiation,
 absolute devices, and multi-consumer routing are not implemented yet.
