@@ -6,6 +6,7 @@ API 文档面向驱动、系统服务和应用开发者。当前阶段只有启�
 - [启动协议契约](boot-contract.md)
 - [中断与时间接口](interrupt-and-time.md)
 - [输入事件接口](input-events.md)
+- [内核线程接口](kernel-threads.md)
 - [AI 操作协议草案](ai-operation-protocol.md)
 - [运行库与动态依赖策略](runtime-linking.md)
 

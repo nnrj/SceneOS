@@ -325,6 +325,8 @@ def command_configure(arguments: argparse.Namespace) -> None:
         getattr(arguments, "mouse_wheel", False) or getattr(arguments, "mouse_basic", False)
     ) else "OFF"
     force_basic_mouse = "ON" if getattr(arguments, "mouse_basic", False) else "OFF"
+    thread_test = "ON" if getattr(arguments, "threads", False) else "OFF"
+    thread_guard_test = "ON" if getattr(arguments, "thread_guard", False) else "OFF"
     force_tsc_clock = (
         "ON" if getattr(arguments, "tsc_clock", False) else "OFF"
     )
@@ -348,6 +350,8 @@ def command_configure(arguments: argparse.Namespace) -> None:
             f"-DSCENEOS_MOUSE_SELF_TEST={mouse_test}",
             f"-DSCENEOS_MOUSE_PROTOCOL_SELF_TEST={mouse_protocol_test}",
             f"-DSCENEOS_FORCE_BASIC_MOUSE={force_basic_mouse}",
+            f"-DSCENEOS_THREAD_SELF_TEST={thread_test}",
+            f"-DSCENEOS_THREAD_GUARD_SELF_TEST={thread_guard_test}",
             f"-DSCENEOS_FORCE_TSC_CLOCK={force_tsc_clock}",
             f"-DSCENEOS_CLOCK_SELF_TEST={clock_test}",
             f"-DSCENEOS_LOCAL_TIMER_SELF_TEST={local_timer_test}",
@@ -698,6 +702,21 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "Vector: 3",
             "IST index: 4",
         )
+    elif arguments.thread_guard:
+        expected = (
+            "SceneOS kernel bootstrap",
+            f"Interrupt controller: {interrupt_controller}",
+            f"Clock source: {clock_source}",
+            "Cooperative BSP threads: ready",
+            "Thread guard page expected address: 0xffffc10000000000",
+            "Triggering thread stack guard self-test",
+            "[EXCEPTION] processor exception",
+            "Vector: 14",
+            "Fault address: 0xffffc10000000000",
+            "Page fault cause: non-present page",
+            "Page fault access: write",
+            "Page fault privilege: supervisor",
+        )
     elif arguments.page_fault:
         expected = (
             "SceneOS kernel bootstrap",
@@ -795,6 +814,20 @@ def command_smoke(arguments: argparse.Namespace) -> None:
         )
     if arguments.clock_check:
         expected += ("Clock diagnostic edge cases: verified",)
+    if not arguments.exception and not arguments.page_fault:
+        expected += ("Cooperative BSP threads: ready", "Thread live records: 1")
+    if arguments.threads:
+        expected += (
+            "Thread API rejection and bootstrap yield: verified",
+            "Thread partial stack allocation rollback: verified",
+            "Thread round-robin execution order: verified",
+            "Thread callee-saved registers and stack alignment: verified",
+            "Thread stack isolation and guard mappings: verified",
+            "Thread capacity, exit, stale IDs and page reclamation: verified",
+            "Thread IRQ exclusion and PIT progress: verified",
+            "Thread workers completed: 24",
+            "Cooperative kernel threads: verified",
+        )
     if arguments.text_input:
         expected += (
             "Text layout edge cases: verified",
@@ -837,6 +870,10 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             )
     if "[PANIC]" in output:
         raise SceneCtlError("kernel panic during serial smoke test")
+    if "[EXCEPTION]" in output and not (
+        arguments.exception or arguments.page_fault or arguments.thread_guard
+    ):
+        raise SceneCtlError("unexpected processor exception during serial smoke test")
     missing = [text for text in expected if text not in output]
     if missing:
         raise SceneCtlError(
@@ -919,6 +956,16 @@ def parser() -> argparse.ArgumentParser:
     smoke.add_argument("--preset", choices=("dev", "release"), default="dev")
     smoke.add_argument("--timeout", type=int, default=10)
     fault_tests = smoke.add_mutually_exclusive_group()
+    fault_tests.add_argument(
+        "--threads",
+        action="store_true",
+        help="validate cooperative threads, context switching and stack reclamation",
+    )
+    fault_tests.add_argument(
+        "--thread-guard",
+        action="store_true",
+        help="write a worker stack guard and validate the resulting page fault",
+    )
     fault_tests.add_argument(
         "--text-input",
         action="store_true",

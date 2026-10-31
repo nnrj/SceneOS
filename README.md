@@ -17,7 +17,9 @@ hardware lines through a fixed IRQ registry, provides fixed-capacity timer and
 input queues, decodes a PS/2 keyboard through IRQ1 and a PS/2 mouse through
 IRQ12 with IntelliMouse wheel negotiation and three-byte fallback, translates
 semantic keys through a minimal US layout into Unicode text
-with UTF-8 encoding, and draws a simple framebuffer scene.
+with UTF-8 encoding, and draws a simple framebuffer scene. Initial cooperative
+BSP threads add guarded kernel stacks, context switching, exit, and explicit
+reaping; normal boot initializes only the bootstrap thread.
 
 ## Quick start
 

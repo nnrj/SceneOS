@@ -132,6 +132,15 @@ QEMU process on faults or failed waits. A normal `build` or `smoke` disables all
 self-tests; direct `cmake --build` retains the cached configuration. See
 [input core and PS/2](input-and-ps2.md).
 
+Run `python tools/scenectl.py smoke --threads --timeout 15` for three rounds of
+24 workers in total, covering order, registers, independent stacks, capacity,
+exit, and page reclamation. `python tools/scenectl.py smoke --thread-guard --timeout 15`
+requires an expected page fault after a real worker writes its guard page.
+Both modes are mutually exclusive with other focused tests and support `--pic`,
+`--tsc-clock`, and `--preset release`. `SCENEOS_THREAD_SELF_TEST` and
+`SCENEOS_THREAD_GUARD_SELF_TEST` default to OFF; normal boot initializes only
+the boot thread. See [cooperative kernel threads](kernel-threads.md).
+
 `python tools/scenectl.py smoke --clock-check --timeout 10` validates CPUID
 frequency decoding and diagnostic boundary cases. Add `--tsc-clock` to test
 the TSC fallback with these checks. Actual CPU diagnostics and synthetic edge

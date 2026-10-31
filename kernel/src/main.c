@@ -16,6 +16,7 @@
 #include <scene/ps2_mouse.h>
 #include <scene/timer.h>
 #include <scene/timer_queue.h>
+#include <scene/thread.h>
 
 #if defined(SCENEOS_CLOCK_SELF_TEST)
 #include "tests/clock.h"
@@ -29,6 +30,9 @@
 #endif
 #if defined(SCENEOS_MOUSE_PROTOCOL_SELF_TEST)
 #include "tests/ps2_mouse.h"
+#endif
+#if defined(SCENEOS_THREAD_SELF_TEST) || defined(SCENEOS_THREAD_GUARD_SELF_TEST)
+#include "tests/thread.h"
 #endif
 
 static uint32_t timer_callback_results[2];
@@ -504,6 +508,21 @@ void kmain(void) {
     if (!scene_ps2_mouse_self_test()) {
         scene_panic("PS/2 mouse protocol self-test failed");
     }
+#endif
+
+    if (!scene_thread_init()) {
+        scene_panic("Kernel thread initialization failed");
+    }
+    scene_log_line("Cooperative BSP threads: ready");
+    scene_log_u64("Thread live records: ", scene_thread_count());
+#if defined(SCENEOS_THREAD_SELF_TEST)
+    if (!scene_thread_self_test()) {
+        scene_panic("Kernel thread self-test failed");
+    }
+    scene_log_line("Cooperative kernel threads: verified");
+#endif
+#if defined(SCENEOS_THREAD_GUARD_SELF_TEST)
+    scene_thread_guard_self_test();
 #endif
 
     scene_log_line("Bootstrap complete. Halting the bootstrap processor.");

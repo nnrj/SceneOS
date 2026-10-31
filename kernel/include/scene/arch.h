@@ -2,9 +2,26 @@
 #define SCENE_ARCH_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 struct scene_boot_info;
+
+/* Architecture-owned continuation; core code must not inspect its contents. */
+struct scene_arch_context {
+    uintptr_t saved_stack;
+};
+
+bool scene_arch_context_prepare(
+    struct scene_arch_context *context,
+    uintptr_t stack_bottom,
+    size_t stack_size,
+    void (*entry)(void)
+);
+/* Caller keeps IF clear across the switch; the resumed continuation restores it. */
+void scene_arch_context_switch(
+    struct scene_arch_context *previous, const struct scene_arch_context *next
+);
 
 bool scene_arch_irq_enable(uint32_t irq);
 bool scene_arch_irq_disable(uint32_t irq);

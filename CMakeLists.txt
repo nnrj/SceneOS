@@ -17,5 +17,7 @@ option(SCENEOS_TEXT_INPUT_SELF_TEST "Validate key-to-text translation and UTF-8"
 option(SCENEOS_MOUSE_SELF_TEST "Wait for injected PS/2 mouse motion" OFF)
 option(SCENEOS_MOUSE_PROTOCOL_SELF_TEST "Validate PS/2 packets, buttons and wheel" OFF)
 option(SCENEOS_FORCE_BASIC_MOUSE "Skip wheel probing and require a three-byte mouse" OFF)
+option(SCENEOS_THREAD_SELF_TEST "Validate cooperative kernel threads and stack lifecycle" OFF)
+option(SCENEOS_THREAD_GUARD_SELF_TEST "Trigger a worker stack guard page fault" OFF)
 
 add_subdirectory(kernel)

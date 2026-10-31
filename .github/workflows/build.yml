@@ -92,7 +92,25 @@ jobs:
       - name: Validate keyboard text in Release
         run: python3 tools/scenectl.py smoke --preset release --text-input --timeout 15
 
-      - name: Build bootable image
+      - name: Validate cooperative kernel threads
+        run: python3 tools/scenectl.py smoke --threads --timeout 15
+
+      - name: Validate threads with the legacy PIC
+        run: python3 tools/scenectl.py smoke --threads --pic --timeout 15
+
+      - name: Validate threads with the TSC clock
+        run: python3 tools/scenectl.py smoke --threads --tsc-clock --timeout 15
+
+      - name: Validate threads in Release
+        run: python3 tools/scenectl.py smoke --preset release --threads --timeout 15
+
+      - name: Validate worker stack guard page
+        run: python3 tools/scenectl.py smoke --thread-guard --timeout 15
+
+      - name: Validate worker stack guard page in Release
+        run: python3 tools/scenectl.py smoke --preset release --thread-guard --timeout 15
+
+      - name: Build ordinary bootable image
         run: python3 tools/scenectl.py image
 
       - name: Run serial smoke test

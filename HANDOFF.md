@@ -16,15 +16,15 @@
    git log -5 --oneline
    ```
 
-3. 预期分支为 `master`，本次滚轮开发的基准提交为（最新 HEAD 以 Git 为准）：
+3. 预期分支为 `master`，本次线程开发的基准提交为（最新 HEAD 以 Git 为准）：
 
    ```text
-   777c1bd feat: add US keyboard text translation and UTF-8
+   5fa99c6 feat: add IntelliMouse wheel negotiation and correct PS/2 motion
    ```
 
    用户已推送此前的迁移恢复、时钟诊断和 Git 忽略规则改动（`f094ef3`）。
-   Local APIC timer 与 PIC/PIT 修复为 `7e3c674`，文本输入为 `777c1bd`；
-   后续滚轮与线程开发的实现、验证见下文。用户已授权完成验证后执行 `git add .` 和 `git commit`
+   Local APIC timer 与 PIC/PIT 修复为 `7e3c674`，文本输入为 `777c1bd`，
+   滚轮为 `5fa99c6`；线程开发的实现、验证见下文。用户已授权完成验证后执行 `git add .` 和 `git commit`
    保存阶段性成果，不推送远端。提交与工作树状态以实际 Git 为准。
 
 4. 先阅读本文以及：
@@ -37,6 +37,8 @@
    - `docs/zh/api/interrupt-and-time.md`
    - `docs/zh/development/input-and-ps2.md`
    - `docs/zh/api/input-events.md`
+   - `docs/zh/development/kernel-threads.md`
+   - `docs/zh/api/kernel-threads.md`
 
 ## 项目定位与已确定原则
 
@@ -108,9 +110,22 @@
 绝对坐标设备、焦点路由和多消费者分发尚未实现。普通启动没有文本框或终端，
 文本转换目前由独立验收消费者使用；UTF-8 编码能力不等于中文输入法已完成。
 
+### M3：线程、进程与用户态（已开始）
+
+- BSP 协作式线程：1 个常驻启动上下文 + 8 个固定工作槽位，共享内核页表。
+- 架构层软件 continuation：C 调用边界保存 callee-saved GPR、RSP 与返回地址，
+  保持 SysV 栈对齐，调度临界区与切栈期间关闭中断。
+- 每工作线程 32 KiB 清零/NX 栈，前后未映射保护页；固定栈区从
+  `0xffffc10000000000` 起，共 320 KiB 虚拟范围。
+- READY/RUNNING/EXITED、主动轮转、自然返回或显式退出、其他线程显式回收，
+  容量限制、单调 ID 与旧 ID 拒绝；部分栈创建失败回滚及物理页归还。
+- 普通启动仅登记启动线程，不创建后台任务。无时钟抢占、wait/sleep/join、
+  FPU/SIMD/TLS、SMP 或用户态；输入队列仍是单消费者。空中间页表尚不回收。
+
 ## 最近关键提交
 
 ```text
+5fa99c6 feat: add IntelliMouse wheel negotiation and correct PS/2 motion
 777c1bd feat: add US keyboard text translation and UTF-8
 7e3c674 feat: add BSP local timer and harden PIT/PIC paths
 f094ef3 update
@@ -288,13 +303,47 @@ python tools/scenectl.py smoke --mouse --timeout 10
 - QEMU 四字节路径与跳过探测的三字节路径已验证；不支持滚轮的设备对探测返回
   ID 0 的场景由脚本化传输覆盖，不等于真机测试。Explorer ID 4、水平滚轮、
   热插拔和丢字节恢复仍待实现。未运行远端 CI、ISO 或真机。
+- 本阶段已提交为 `5fa99c6`，未推送；随后直接进入 M3。
+
+### 2026-10-31 BSP 协作式内核线程
+
+- 新增 `scene/thread.h`、`core/thread.c`、架构 context C/NASM 与专项 C/NASM
+  验收。正常启动注册启动上下文；未引入后台消费者或改变输入/GUI 行为。
+- 新增 `smoke --threads`、`--thread-guard`，支持 PIC/TSC/Release；脚本普通
+  模式会拒绝意外处理器异常，只有显式异常专项允许对应故障。
+- 三轮各 8 个工作线程，共 24 个，验证轮转顺序、独立栈哨兵、每线程不同的
+  RBX/RBP/R12–R15 哨兵与栈对齐、持续 PIT tick、关中断时拒绝调度、容量耗尽、
+  自然/显式退出、退出未回收状态、旧 ID、双重回收拒绝、栈清零和数据页归还。
+  占用第四个栈页强制前三页回滚，预热后空闲物理页数不再减少。
+- 实际工作线程写下保护页，得到向量 14、CR2 `0xffffc10000000000`、错误码 2
+  （supervisor write / non-present）；该场景不是完整栈溢出/双重故障验证。
+- 14 组最终 QEMU 回归全部通过，日志在 `build/verify/threads-20261031/final/`：
+
+  | 配置 | 路径 | 组数 |
+  | --- | --- | --- |
+  | Dev | `--threads`，分别使用 APIC、PIC、TSC | 3 |
+  | Release | `--threads`，分别使用 APIC、PIC | 2 |
+  | Dev / Release | `--thread-guard`（Dev 另加 PIC） | 3 |
+  | Dev | `--mouse-wheel`、`--text-input`、`--lapic-timer`、`--page-fault` | 4 |
+  | Dev / Release | 普通 `smoke` | 2 |
+
+- 均为 15 秒上限；保护页专项是按预期出现异常后通过，其余正常路径到达
+  `Bootstrap complete`。首次构建曾因测试数组清零产生未提供的 `memset` 失败，
+  改为逐项初始化后通过；`dev-threads-initial-run.log` 记录编译失败，同名 serial
+  是此前普通启动副本，不作为线程运行证据。
+- 临时省略 R12 恢复后，寄存器用例按预期发现工作线程失败；脚本 finally 恢复
+  原字节，随后线程与普通 Dev smoke 均重新通过，证据为父目录
+  `missing-r12-negative-*`、`restore-*`。
+- CI、中英文架构/路线图/开发/API 与目录索引同步。普通 Dev/Release 的
+  13 个自测/强制模式开关已确认全 OFF。Python 语法、参数组合/互斥、双语文档
+  结构与链接、`git diff --check` 通过。未运行远端 CI、ISO 或真机。
 
 ## 建议下一步
 
 继续进入 M3 的内核线程基础，不要过早进入完整桌面：
 
-1. 实现 BSP 协作式内核线程、独立保护栈、软件上下文切换与退出回收，增加 QEMU
-   调度/寄存器/栈隔离验收，再推进抢占、等待队列及用户态。
+1. 在已验证的协作式切栈基础上增加等待队列、条件检查/入队的原子性和唤醒，
+   明确启动/空闲上下文角色及不可抢占区后，再接入时钟抢占与用户态。
 2. 正式窗口系统仍按路线图置于用户态；当前不插入内核期可见光标原型。
 3. 文本消费者/终端形成时，再按交互需要选择布局、焦点和编辑动作策略；不把
    输入法、组合文本或布局规则放入 PS/2 驱动。

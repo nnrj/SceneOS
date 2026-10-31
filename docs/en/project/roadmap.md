@@ -58,9 +58,13 @@ observable completion criteria.
 - More layouts, input methods/composition, extended mouse protocols, and
   dynamic input capacity.
 
-## M3: threads, processes, and user space
+## M3: threads, processes, and user space (in progress)
 
-- Software context switching, preemption, and wait queues.
+- Cooperative BSP threads, software context switching, guarded stacks, exit,
+  explicit reaping, and register/stack/lifecycle/guard-page QEMU acceptance.
+  (initial version complete)
+- Waiting/wakeup, non-preemptible regions, timer preemption, priorities, and
+  dynamic thread capacity.
 - Ring 3, per-process address spaces, system calls, and IPC.
 - ELF64 user programs, initramfs, and a small libc.
 

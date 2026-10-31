@@ -7,6 +7,7 @@ set(SCENEOS_KERNEL_SOURCES
     src/core/log.c
     src/core/local_timer.c
     src/core/text_input.c
+    src/core/thread.c
     src/core/timer_queue.c
     src/memory/heap.c
     src/memory/physical.c
@@ -16,6 +17,7 @@ set(SCENEOS_KERNEL_SOURCES
     src/drivers/input/ps2_mouse.c
     src/drivers/input/ps2_mouse_protocol.c
     src/arch/x86_64/descriptors.c
+    src/arch/x86_64/context.c
     src/arch/x86_64/exceptions.c
     src/arch/x86_64/acpi.c
     src/arch/x86_64/apic.c
@@ -26,6 +28,7 @@ set(SCENEOS_KERNEL_SOURCES
     src/arch/x86_64/timer.c
     src/arch/x86_64/tsc.c
     src/arch/x86_64/descriptors.asm
+    src/arch/x86_64/context.asm
     src/arch/x86_64/exceptions.asm
     src/arch/x86_64/halt.asm
     src/arch/x86_64/interrupts.asm
@@ -100,6 +103,18 @@ endif()
 
 if(SCENEOS_FORCE_BASIC_MOUSE)
     target_compile_definitions(scene-kernel PRIVATE SCENEOS_FORCE_BASIC_MOUSE=1)
+endif()
+
+if(SCENEOS_THREAD_SELF_TEST OR SCENEOS_THREAD_GUARD_SELF_TEST)
+    target_sources(scene-kernel PRIVATE src/tests/thread.c src/arch/x86_64/thread_test.asm)
+endif()
+
+if(SCENEOS_THREAD_SELF_TEST)
+    target_compile_definitions(scene-kernel PRIVATE SCENEOS_THREAD_SELF_TEST=1)
+endif()
+
+if(SCENEOS_THREAD_GUARD_SELF_TEST)
+    target_compile_definitions(scene-kernel PRIVATE SCENEOS_THREAD_GUARD_SELF_TEST=1)
 endif()
 
 target_compile_options(scene-kernel PRIVATE

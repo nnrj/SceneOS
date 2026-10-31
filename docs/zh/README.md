@@ -16,6 +16,7 @@
 - [早期异常与物理内存](development/early-exceptions-and-memory.md)
 - [硬件中断与早期时间基准](development/interrupts-and-time.md)
 - [输入核心与 PS/2 设备](development/input-and-ps2.md)
+- [协作式内核线程](development/kernel-threads.md)
 
 ## API 文档
 
@@ -23,5 +24,6 @@
 - [启动协议契约](api/boot-contract.md)
 - [中断与时间接口](api/interrupt-and-time.md)
 - [输入事件接口](api/input-events.md)
+- [内核线程接口](api/kernel-threads.md)
 - [AI 操作协议草案](api/ai-operation-protocol.md)
 - [运行库与动态依赖策略](api/runtime-linking.md)

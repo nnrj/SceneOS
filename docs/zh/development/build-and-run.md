@@ -123,6 +123,14 @@ QEMU 串口应输出 `SceneOS kernel bootstrap`、GDT/TSS/IDT、bootloader、内
 `smoke` 会关闭所有自测开关；直接 `cmake --build` 保留当前缓存配置。详情见
 [输入核心与 PS/2](input-and-ps2.md)。
 
+线程验收使用 `python tools/scenectl.py smoke --threads --timeout 15`，三轮共
+运行 24 个工作线程，覆盖轮转、寄存器、独立栈、容量、退出和页面回收。保护页
+验收使用 `python tools/scenectl.py smoke --thread-guard --timeout 15`，要求从
+真实工作线程写入保护页后出现预期缺页异常。两者与其他专项自测互斥，支持
+`--pic`、`--tsc-clock` 和 `--preset release`。`SCENEOS_THREAD_SELF_TEST` 与
+`SCENEOS_THREAD_GUARD_SELF_TEST` 默认 OFF；普通启动只初始化启动线程。
+说明与限制见[协作式内核线程](kernel-threads.md)。
+
 `python tools/scenectl.py smoke --clock-check --timeout 10` 验证 CPUID 频率
 解析和诊断边界；追加 `--tsc-clock` 可验证 TSC 回退与自测共存。日志中的真实
 CPU 诊断与人工输入的边界用例分开报告，详见[中断与时间](interrupts-and-time.md)。
