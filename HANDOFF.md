@@ -1,6 +1,6 @@
 # SceneOS 会话交接
 
-> 更新时间：2026-10-29  
+> 更新时间：2026-10-31
 > 新工作区：`E:\WORKSPACE\AgentWork\OSWork`  
 > SceneOS 仓库：`E:\WORKSPACE\AgentWork\OSWork\SceneOS`
 
@@ -16,14 +16,16 @@
    git log -5 --oneline
    ```
 
-3. 预期分支为 `main`，当前开发基准 HEAD 为：
+3. 预期分支为 `master`，本轮开发开始时的基准 HEAD 为：
 
    ```text
-   22cae93 feat: add PS/2 mouse input pipeline
+   f094ef3 update
    ```
 
-   2026-10-29 的迁移恢复和时钟诊断改动尚未提交，工作树不再干净；本交接文件
-   本身也尚未跟踪。请以实际 Git 状态为准，保留这些改动。
+   用户已提交并推送此前的迁移恢复、时钟诊断和 Git 忽略规则改动，本轮开始时
+   工作树干净，`master` 与本地记录的 `origin/master` 一致。2026-10-31 新增
+   Local APIC timer 与 PIC/PIT 修复的实现与验证见下文；提交与工作树状态以
+   实际 Git 为准。用户已授权完成验证后分阶段本地提交，不推送远端。
 
 4. 先阅读本文以及：
 
@@ -31,6 +33,8 @@
    - `docs/zh/project/architecture.md`
    - `docs/zh/project/roadmap.md`
    - `docs/zh/development/build-and-run.md`
+   - `docs/zh/development/interrupts-and-time.md`
+   - `docs/zh/api/interrupt-and-time.md`
    - `docs/zh/development/input-and-ps2.md`
    - `docs/zh/api/input-events.md`
 
@@ -86,6 +90,10 @@
 - 首选 64 位 HPET 单调时钟，PIT 校准 TSC 回退，纳秒换算。
 - CPUID.15H 声明频率与 PIT 实测 TSC 频率交叉校验；记录 invariant 标志、
   5% 容差、偏差及缺失/异常状态。诊断不覆盖 HPET 优先级或实测回退频率。
+- 可选 BSP Local APIC timer：HPET/PIT 校准、单次/周期触发、停止、待处理中断
+  清理与重新启动；专用向量 48，不占 legacy IRQ 注册项，普通启动仍使用 PIT。
+- 强制 PIC 回归入口；PIC 回退在设备 IRQ 启用前关闭固件遗留的 Local APIC，
+  修复兼容路径下 PIT 中断无法送达的问题。
 - 固定 32 项小顶堆定时器队列，支持调度、取消和非 IRQ 上下文回调。
 - 共享 i8042 控制器层。
 - PS/2 Set 1 键盘：IRQ1、语义键码、左右修饰键、Caps Lock、按下/释放/重复。
@@ -99,6 +107,8 @@
 ## 最近关键提交
 
 ```text
+f094ef3 update
+c8a57cb update
 22cae93 feat: add PS/2 mouse input pipeline
 8c35044 feat: add PS/2 keyboard input pipeline
 aabc6e6 feat: add generic legacy IRQ registry
@@ -127,7 +137,7 @@ python tools/scenectl.py smoke --mouse --timeout 10
 注入 `A`，鼠标测试注入相对移动，分别验证 IRQ1/IRQ12、解码器和统一事件队列。
 普通 `run.ps1` 中暂时看不到光标移动或键盘反馈，因为底层输入尚未接到 GUI。
 
-### 2026-10-29 新路径验证与未提交更新
+### 2026-10-29 新路径验证（后续已由用户提交）
 
 - 原 Dev/Release 构建目录已保留到 `build/before-relocation-20261029/`。
   新的两份 CMake 缓存均指向 `E:/WORKSPACE/AgentWork/OSWork/SceneOS`。
@@ -158,21 +168,67 @@ python tools/scenectl.py smoke --mouse --timeout 10
 - CI 配置和中英文项目/开发/API 文档已同步；远端 CI、ISO 和真机本次未运行。
 - 当前执行沙箱内 Ninja 曾两次停滞，退出本次启动的构建进程后，在沙箱外运行
   项目本地构建和有时限的无界面 QEMU 测试成功。未修改系统环境或 NNOS。
-- 本次未 commit、未 push。`--fresh` 的使用与影响见构建文档。
+- 当日代理未 commit/push；这些改动后来已由用户提交并推送。
+  `--fresh` 的使用与影响见构建文档。
+
+### 2026-10-31 Local APIC timer 开发
+
+- 修改前默认 Dev smoke 通过；本轮日志归档在 `build/verify/lapic-20261031/`。
+- 新增 `scene/local_timer.h`、核心状态/校准/计数换算、xAPIC 硬件适配与向量 48
+  入口，以及独立的自测编译单元。寄存器操作仅在架构层；启动、停止和快照操作
+  保存/恢复 IF。活动定时器不能隐式覆盖，旧 pending 中断清理前拒绝重新启动。
+- 增加 `smoke --lapic-timer`、`--pic` 和 panic 检查，默认所有新增开关关闭。
+  `--lapic-timer --tsc-clock` 使用 PIT 校准；`--lapic-timer --pic` 验证硬件不可用
+  时继续使用 PIT。该接口当前不接入调度器或软件定时器队列，也不改变 GUI。
+- 首轮 PIC 测试捕获到 PIT watchdog 超时；修复后通过。失败现场保存在
+  `dev-pic-run.log` / `dev-pic-serial.log`，修复后日志使用 `dev-pic-fixed-*`，
+  未覆盖失败证据。
+- 比较 HPET/PIT 校准结果时发现原 PIT 控制字 `0x36` 实为 mode 3，IOAPIC 路径
+  的 tick 交付约为配置值的两倍。本地定时器测得约 62.4 MHz（HPET）与
+  31.7 MHz（PIT），修改前基线也有同类速率现象。改用原本意图的 mode 2
+  `0x34`，并增加以 HPET 实测 PIT 频率的 75%–125% 验收，防止仅有中断就通过。
+  修复后 Dev 实测 PIT 约 99–101 Hz，本地定时器两种校准约 62.4/63.0 MHz。
+  临时恢复旧控制字的负向验证实测 201 Hz，自测按预期失败；脚本已恢复新代码，
+  证据为 `old-pit-control-negative-*`。修改前日志保留；最终回归日志放在同目录
+  的 `final/` 下。
+- 最终 16 组 QEMU 验收全部通过，均在修改后的代码上构建：
+
+  | 配置 | 验证路径 | 组数 |
+  | --- | --- | --- |
+  | Dev / Release | `--lapic-timer`，分别使用 HPET、`--tsc-clock`、`--pic` | 6 |
+  | Dev | `--exception`、`--page-fault` | 2 |
+  | Dev | `--clock-check`，分别使用 HPET、`--tsc-clock` | 2 |
+  | Dev | `--keyboard`、`--mouse`，分别使用 APIC、`--pic` | 4 |
+  | Dev / Release | 普通 `smoke` | 2 |
+
+- 各次命令均使用 `--timeout 10`，逐项保存 `*-run.log` 与 `*-serial.log`。
+  Release 的 HPET/PIT 本地定时器校准分别约为 62.45/62.52 MHz；有 HPET 的四个
+  自测中 PIT 实测为 99–101 Hz。负向用例按预期失败，不计入上述成功的 16 组。
+- 最后两次普通 smoke 完成 Dev/Release 构建恢复：8 个自测/强制模式开关全为 OFF，
+  两个默认串口日志都包含 `Bootstrap complete`，未残留本地定时器自测入口。
+- `git diff --check`、Python 语法与 smoke 参数组合/互斥检查、双语文档结构和
+  仓库文档链接检查通过。NNOS 仍仅有前述两个历史产物改动。
+- CI 与中英文项目/开发/API 文档已同步。
+- 短采样只用于初期评估；长期精度、ARAT/深度省电、SMP、TSC-deadline 和
+  调度/睡眠唤醒集成尚未验证或实现。远端 CI、ISO 与真机本轮未运行。
+- 本阶段已具备提交条件；用户已授权阶段性本地提交，提交记录以 Git 为准。
+  未推送远端。
 
 ## 建议下一步
 
 优先继续 M2，不要过早进入完整桌面：
 
-1. 评估 Local APIC timer；保留 PIT 作为校准/兼容路径。
-2. 在输入核心上增加最小键盘布局与按键到 Unicode/文本事件的转换层，但不要把
+1. 在输入核心上增加最小键盘布局与按键到 Unicode/文本事件的转换层，但不要把
    布局逻辑放进 PS/2 驱动。
-3. 增加 PS/2 IntelliMouse 滚轮协商与四字节包测试。
-4. 随后再决定进入 M3（线程/用户态）还是先做一个仅内核期的可见光标原型；正式
+2. 增加 PS/2 IntelliMouse 滚轮协商与四字节包测试。
+3. 随后再决定进入 M3（线程/用户态）还是先做一个仅内核期的可见光标原型；正式
    窗口系统仍应按路线图置于用户态。
+4. 进入调度/唤醒阶段时，再将本地定时器接入时钟事件源选择与 deadline 编程；
+   当前保留 PIT 默认路径，不因可选自测通过就承诺跨 CPU 或电源状态可靠性。
 
 每个阶段都应同步：实现、自动化 QEMU 验收、CI、中英文项目/开发/API 文档。
-仅在用户授权时本地 commit；除非用户明确要求，不推送远端。
+用户已授权在适当阶段执行 `git add .` 与 `git commit`，完成必要验收后可直接
+提交阶段成果；不执行 push。
 
 ## 安全与仓库注意事项
 

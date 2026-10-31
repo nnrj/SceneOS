@@ -9,6 +9,12 @@ These are kernel module interfaces, not a stable driver ABI.
 - `scene_arch_interrupts_activate_apic(boot_info)` discovers and enables the
   Local APIC and IOAPIC from ACPI MADT.
 - `scene_arch_interrupts_enable()` / `disable()` control IF on the current CPU.
+- `scene_arch_interrupts_save()` saves interrupt state and disables local
+  maskable interrupts, returning an opaque token for `restore(state)`.
+- `scene_arch_interrupts_restore(state)` restores only interrupt enable state.
+  Pair tokens on the same CPU in stack order; this is neither full register
+  restoration nor an SMP lock.
+- `scene_arch_interrupts_enabled()` queries the current CPU's interrupt state.
 - `scene_arch_interrupt_controller()` returns a diagnostic controller name.
 
 The required order is exception IDT, PIC-compatible initialization, paging
@@ -85,6 +91,61 @@ rate accuracy.
 The invariant check in `scene_clock_source_stable()` and frequency comparison
 describe different properties; one boolean cannot replace the full snapshot.
 TSC measurement failure does not fail initialization when HPET is available.
+
+## Local hardware timer
+
+The header is `scene/local_timer.h`. The current xAPIC evaluation path covers
+only the BSP. Calls are restricted to serial ordinary kernel context on one
+CPU. This is not a stable ABI and accepts no user callbacks.
+
+- `scene_local_timer_init(calibration_ticks)` calibrates once over 2–16 PIT
+  ticks, requiring a ready clock/PIT and IF enabled. HPET measures elapsed
+  time when available; otherwise PIT supplies the reference. Inactive APIC,
+  repeated initialization, invalid parameters/measurement, and watchdog
+  timeout return `false`.
+- `scene_local_timer_ready()` returns `true` after calibration; stop retains it.
+- `scene_local_timer_start_one_shot(delay_ns)` rounds delay upward to a
+  nonzero hardware count. Zero delay, a reload above 32 bits, or another invalid
+  request returns `false`.
+- `scene_local_timer_start_periodic(frequency_hz)` uses the nearest integer
+  reload. Frequency must be nonzero and no greater than the divided counter
+  rate; the actual rate may differ from the request.
+- `scene_local_timer_stop()` stops counting, masks interrupts, and sets stopped
+  mode. Repeated calls are allowed.
+- `scene_local_timer_get_info(out)` copies a consistent snapshot. An
+  uncalibrated timer or null pointer returns `false` without writing the
+  destination. The caller owns the snapshot.
+
+Both start calls require calibration, stopped mode, and no old interrupt
+awaiting service. Failure never replaces an active timer. An interrupt raised
+before stop may still arrive; stopped state ignores it for event counting but
+still receives EOI. If that temporarily prevents rearm, allow interrupts to
+drain before retrying; never retry indefinitely with IF cleared. Acceptance of
+a one-shot interrupt automatically returns mode to `SCENE_LOCAL_TIMER_STOPPED`.
+Configuration, stop, and snapshot access preserve the caller's IF state. These
+local critical sections do not provide SMP/NMI safety.
+
+`scene_local_timer_info` fields:
+
+| Field | Meaning |
+| --- | --- |
+| `counter_frequency_hz` | Calibrated down-counter rate after divide by 16, from 1 through UINT32_MAX Hz |
+| `interrupts` | Cumulative interrupts accepted while active; excludes late stopped events and is not reset on rearm |
+| `reload_count` | Last successful start's reload, retained after stop; not a live remaining count |
+| `mode` | `SCENE_LOCAL_TIMER_STOPPED`, `ONE_SHOT`, or `PERIODIC` with the same enum prefix |
+| `calibrated_with_hpet` | `true` for an HPET reference, `false` for PIT |
+
+Event counts are not a monotonic clock. Periodic interrupts need not record
+every hardware expiration because pending events coalesce while interrupts
+are blocked. This interface neither dispatches the software queue nor replaces
+`scene_timer_ticks()`, and promises no cross-sleep or cross-CPU rate stability.
+
+`scene_arch_local_timer_*` is the architecture adapter: `available` queries the
+hardware path, `pending` checks pending/in-service events, `configure` programs
+the counter, `current_count` reads its remainder, and `stop` stops it. The
+local-timer core calls configuration/stop with local interrupts disabled.
+External drivers must not bypass the core's hardware/mode state. The
+architecture entry calls internal `on_interrupt`, then sends EOI centrally.
 
 ## Timer queue
 

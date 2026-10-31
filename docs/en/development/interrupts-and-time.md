@@ -14,11 +14,15 @@ entries and every IOAPIC redirection entry, installs a spurious vector, then
 opens only the GSI carrying the PIT. A typical Q35 MADT overrides ISA IRQ0 to
 GSI 2; SceneOS consumes the table instead of hard-coding that override. If
 RSDP or MADT discovery fails, the 8259A compatibility path remains active.
+Before enabling device IRQs, fallback globally disables any firmware-enabled
+Local APIC through IA32_APIC_BASE so a masked LINT0 cannot block direct 8259A
+delivery. `smoke --pic` forces this path. This is a BSP boot choice, not runtime
+controller switching; see [Intel SDM Vol. 3A §12.4.3](https://cdrdv2-public.intel.com/835754/253668-sdm-vol-3a.pdf).
 
 ## Interrupt entry
 
-NASM emits entries for legacy IRQ0–15 at vectors 32–47 and vector 255 for APIC
-spurious interrupts. The common entry saves general registers, aligns the C
+NASM emits entries for legacy IRQ0–15 at vectors 32–47, local timer vector 48,
+and APIC spurious vector 255. The common entry saves general registers, aligns the C
 call stack for the SysV ABI, invokes the dispatcher, restores state, and
 returns with `iretq`. IRQ0 increments the 64-bit tick count before sending a
 Local APIC or 8259A EOI according to the active controller.
@@ -38,7 +42,8 @@ dynamic vector allocation remain future work.
 
 ## PIT and watchdog
 
-PIT channel 0 runs in rate-generator mode at approximately 100 Hz. The boot
+PIT channel 0 uses mode 2 rate generation (control byte `0x34`) at approximately
+100 Hz. The boot
 self-test enables interrupts and waits for three ticks. The wait loop also
 uses a two-billion-TSC-cycle startup watchdog so broken routing cannot leave
 QEMU waiting forever.
@@ -76,8 +81,41 @@ safety, or long-term hardware accuracy.
 
 Both sources use the same quotient-and-remainder nanosecond conversion instead
 of directly multiplying `elapsed * 1,000,000,000`. The clock origin is source
-initialization, not boot or the Unix epoch. Local APIC timer evaluation and
-longer-window clock accuracy checks remain future work.
+initialization, not boot or the Unix epoch. Longer-window clock accuracy
+checks remain future work.
+
+## Optional BSP Local APIC timer
+
+`scene/local_timer.h` provides a hardware-interrupt event counter separate from
+the monotonic clock and software timer queue. Normal boot neither calibrates
+nor starts it. `smoke --lapic-timer` compiles a separate self-test and stops the
+hardware afterward. Dedicated vector 48 uses the common save/return path; the
+dispatcher updates local-timer state and sends Local APIC EOI. It consumes no
+legacy IRQ0–15 slot and invokes no arbitrary callbacks inside the IRQ.
+
+The implementation uses the xAPIC 32-bit down-counter with a fixed divide by
+16. Calibration waits for a PIT boundary, then counts with the timer interrupt
+masked over 2–16 PIT ticks (eight in the self-test). When available, raw HPET
+counts measure elapsed time; otherwise PIT ticks and frequency supply the
+reference. The reported frequency is the divided counter rate, not the bus or
+CPU frequency. Waits retain a bounded watchdog. Counter expiration, no
+decrement, an invalid reference interval, and arithmetic overflow all fail.
+
+One-shot delays round upward to a count; periodic rates use the nearest nonzero
+reload value. Start writes initial count last; stop masks the LVT and writes
+initial count zero, following [Intel SDM Vol. 3A §12.5.4](https://cdrdv2-public.intel.com/835754/253668-sdm-vol-3a.pdf).
+Stop cannot retract an interrupt already in IRR/ISR. Stopped state ignores
+such an event, but the dispatcher still sends EOI. Rearm checks IRR, ISR, and
+LVT delivery status and fails while an old event remains; callers may retry
+after allowing interrupts to drain. Starting an active timer also fails
+without replacing it. Configuration and snapshots save/restore the caller's
+IF state instead of unconditionally enabling interrupts.
+
+This remains a BSP-serial evaluation interface for ordinary kernel context.
+A short calibration does not establish long-term rate accuracy. Per-CPU state,
+TSC-deadline, ARAT/power-state validation, and scheduling/sleep-wakeup integration
+remain pending. These tests do not prove deep-sleep or SMP reliability on real
+hardware. The default PIT and software timer queue retain their existing path.
 
 ## Early timer queue
 
@@ -100,6 +138,9 @@ python tools/scenectl.py smoke
 python tools/scenectl.py smoke --page-fault
 python tools/scenectl.py smoke --clock-check --timeout 10
 python tools/scenectl.py smoke --clock-check --tsc-clock --timeout 10
+python tools/scenectl.py smoke --lapic-timer --timeout 10
+python tools/scenectl.py smoke --lapic-timer --tsc-clock --timeout 10
+python tools/scenectl.py smoke --lapic-timer --pic --timeout 10
 ```
 
 The default test requires `Interrupt controller: Local APIC + IOAPIC`, the PIT
@@ -116,3 +157,21 @@ missing measurements, and unsupported frequency ranges. Success emits
 `Clock diagnostic edge cases: verified`. The current default QEMU CPU exposes
 no usable CPUID.15H frequency, so its actual status is `unavailable`. Synthetic
 cases validate decoding and classification, not a physical CPU's frequency.
+
+Local-timer checks cover arithmetic boundaries, uninitialized/invalid/repeated
+requests, periodic delivery followed by stop, exactly one one-shot delivery,
+and rearm after draining an old interrupt. The drain test deliberately clears
+IF until an interrupt is pending, verifies immediate rearm after stop fails,
+then restores IF and checks that the old event is ignored and rearm succeeds.
+It also checks continuing PIT ticks and an unchanged IRQ registration count.
+`--tsc-clock` disables the HPET path, selecting PIT calibration. `--pic` requires
+an unavailable local timer with a working PIT. `--pic --keyboard` and
+`--pic --mouse` cover master-PIC and cascaded slave-PIC input routes. Any
+`[PANIC]` makes smoke fail.
+
+When HPET is available, the test also measures the rate of eight PIT ticks
+against it and requires 75%–125% of the configured rate. This broad tolerance
+catches errors such as doubled delivery; it is not an accuracy certification.
+The old control byte `0x36` actually selected mode 3. This host's QEMU IOAPIC
+path showed roughly doubled ticks, making PIT calibration about half the HPET
+result. The intended mode 2 and this regression check now address that case.

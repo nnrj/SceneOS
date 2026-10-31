@@ -88,8 +88,13 @@ scheduling, cancellation, and due-callback dispatch outside IRQ context.
 The core IRQ layer now owns a fixed 16-entry legacy-line registry. The x86
 layer routes each attached line through its MADT override to the IOAPIC; PIT
 also attaches IRQ0 through this interface instead of being hard-coded in the
-interrupt dispatcher. Cross-CPU clock synchronization, Local APIC timer
-support, dynamic queue capacity, and shared IRQ handlers remain pending. The
+interrupt dispatcher. An optional BSP Local APIC timer uses dedicated vector
+48, calibrates against HPET or PIT, and supports one-shot/periodic delivery,
+stop, and pending-interrupt drain without consuming legacy IRQ slots. Normal
+boot still uses PIT. PIC fallback disables any firmware-enabled Local APIC to
+restore direct 8259A delivery. Cross-CPU clock synchronization, local-timer
+scheduling/wakeup integration, dynamic queue capacity, and shared IRQ handlers
+remain pending. The
 input core adds a hardware-neutral semantic key-event queue. The initial i8042
 driver configures PS/2 translation, consumes Set 1 bytes on IRQ1, tracks key
 state and modifiers, and publishes press/release/repeat events. Text and layout

@@ -111,3 +111,22 @@ QEMU 串口应输出 `SceneOS kernel bootstrap`、GDT/TSS/IDT、bootloader、内
 `python tools/scenectl.py smoke --clock-check --timeout 10` 验证 CPUID 频率
 解析和诊断边界；追加 `--tsc-clock` 可验证 TSC 回退与自测共存。日志中的真实
 CPU 诊断与人工输入的边界用例分开报告，详见[中断与时间](interrupts-and-time.md)。
+
+Local APIC timer 的可选验收：
+
+```powershell
+python tools/scenectl.py smoke --lapic-timer --timeout 10
+python tools/scenectl.py smoke --lapic-timer --tsc-clock --timeout 10
+python tools/scenectl.py smoke --lapic-timer --pic --timeout 10
+python tools/scenectl.py smoke --preset release --lapic-timer --timeout 10
+python tools/scenectl.py smoke --keyboard --pic --timeout 10
+python tools/scenectl.py smoke --mouse --pic --timeout 10
+```
+
+第一条使用 HPET 校准；`--tsc-clock` 改用 PIT 校准并保留 TSC 单调时钟。
+`--pic` 强制走 8259A 路径，此时本地定时器应报告不可用，PIT/输入仍应正常。
+该参数可与输入或时钟模式组合；`--lapic-timer` 与其他专项自测互斥。
+`SCENEOS_LOCAL_TIMER_SELF_TEST` 和 `SCENEOS_FORCE_PIC` 默认均为 OFF；scenectl
+每次配置都显式设置全部自测/强制开关。测试后运行普通 `build` 或 `smoke` 即恢复
+默认配置，直接 `cmake --build` 则沿用缓存选项。任何模式出现 `[PANIC]` 都使
+smoke 失败。CI 配置覆盖本地定时器的 HPET/PIT、PIC 回退和输入兼容路径。

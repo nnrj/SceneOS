@@ -7,7 +7,8 @@
 #define SCENE_PIT_INPUT_HZ 1193182U
 #define SCENE_PIT_CHANNEL0 0x40U
 #define SCENE_PIT_COMMAND 0x43U
-#define SCENE_PIT_RATE_GENERATOR 0x36U
+/* Channel 0, low/high byte access, mode 2 rate generator, binary count. */
+#define SCENE_PIT_RATE_GENERATOR 0x34U
 
 static volatile uint64_t elapsed_ticks;
 static uint32_t configured_frequency;

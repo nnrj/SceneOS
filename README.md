@@ -11,10 +11,11 @@ information, installs its own GDT/TSS/IDT and CR3, manages physical pages with
 per-region bitmaps, maps and unmaps 4 KiB pages, provides a reusable
 higher-half kernel heap, discovers APIC topology through ACPI MADT, routes a
 PIT hardware timer through Local APIC/IOAPIC, selects an HPET monotonic clock
-with a calibrated-TSC fallback and CPUID frequency diagnostics, dispatches
+with a calibrated-TSC fallback and CPUID frequency diagnostics, offers an
+optional BSP Local APIC timer with one-shot/periodic validation, dispatches
 hardware lines through a fixed IRQ registry, provides fixed-capacity timer and
-input queues, decodes a PS/2
-keyboard through IRQ1 and a PS/2 mouse through IRQ12, and draws a simple
+input queues, decodes a PS/2 keyboard through IRQ1 and a PS/2 mouse through
+IRQ12, and draws a simple
 framebuffer scene.
 
 ## Quick start

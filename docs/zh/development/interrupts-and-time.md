@@ -10,12 +10,15 @@ Override。MMIO 页面映射到 SceneOS 专用高半地址，不向核心代码�
 Local APIC 启用时，初始化代码屏蔽其本地向量项和全部 IOAPIC redirection
 entry，设置 spurious vector，再只开放 PIT 所在 GSI。Q35 的典型 MADT 把
 ISA IRQ0 覆盖为 GSI 2；实现使用表内数据，不硬编码这个覆盖关系。若 RSDP 或
-MADT 不可用，则保留 8259A 兼容路径。
+MADT 不可用，则保留 8259A 兼容路径。该回退在启用设备 IRQ 前，通过
+IA32_APIC_BASE 全局关闭固件可能遗留的 Local APIC，避免其屏蔽的 LINT0 阻断
+8259A 交付；`smoke --pic` 可强制验证这一路径。这是单 BSP 启动选择，不提供
+运行时控制器切换。硬件依据见 [Intel SDM Vol. 3A §12.4.3](https://cdrdv2-public.intel.com/835754/253668-sdm-vol-3a.pdf)。
 
 ## 中断入口
 
-NASM 为 legacy IRQ0–15 生成向量 32–47 的入口，并另设向量 255 作为 APIC
-spurious vector。公共入口保存通用寄存器、按 SysV ABI 对齐 C 调用栈，调用
+NASM 为 legacy IRQ0–15 生成向量 32–47 的入口，另设向量 48 为本地定时器、
+向量 255 为 APIC spurious vector。公共入口保存通用寄存器、按 SysV ABI 对齐 C 调用栈，调用
 分派器后恢复现场并执行 `iretq`。IRQ0 更新 64 位 tick，再按当前控制器发送
 Local APIC EOI 或 8259A EOI。
 
@@ -30,7 +33,8 @@ MADT 的全部 ISA Interrupt Source Override 会保存到每 line 的 GSI/flags�
 
 ## PIT 与 watchdog
 
-PIT channel 0 以 rate-generator 模式配置为约 100 Hz。启动自测打开中断并
+PIT channel 0 使用 mode 2 rate generator（控制字 `0x34`），配置为约 100 Hz。
+启动自测打开中断并
 等待三个 tick；等待循环同时使用 TSC 的 20 亿周期上限作为启动 watchdog，
 避免错误路由导致 QEMU 永久等待。
 
@@ -59,7 +63,32 @@ invariant 标志均不构成跨 CPU 同步、迁移安全或真机长期精度�
 
 两种来源使用同一纳秒换算：把商与余数分开计算，避免
 `elapsed * 1,000,000,000` 直接溢出。时钟原点是来源初始化完成时刻，不是开机
-或 Unix epoch。后续仍需评估 Local APIC timer 和更长窗口的时钟精度。
+或 Unix epoch。更长窗口的时钟精度仍待验证。
+
+## 可选 BSP Local APIC timer
+
+`scene/local_timer.h` 提供硬件中断事件计数器，独立于单调时钟和软件定时器队列。
+普通启动不校准或启动它；`smoke --lapic-timer` 编入独立自测，完成后停止硬件。
+固定向量 48 走公共保存/返回路径，分派器更新本地定时器状态并发送 Local APIC
+EOI，不占用 legacy IRQ0–15 的注册项，也不在 IRQ 中调用任意回调。
+
+当前采用 xAPIC 的 32 位倒计数器和固定 16 分频。校准先等待 PIT 边界，在
+屏蔽定时器中断的情况下计数 2–16 个 PIT tick（自测使用 8 个）；可用时用 HPET
+原始计数器测量实际经过时间，否则用 PIT tick 与频率。日志中的频率是分频后的
+倒计数速率，不是总线或 CPU 频率。等待沿用有界 watchdog，计数器耗尽、未递减、
+参考时间无效或算术溢出都会失败。
+
+单次延迟向上取整到计数单位，周期频率取最近的非零装载值。启动时最后写 initial
+count；停止时屏蔽 LVT 并将 initial count 清零，遵循
+[Intel SDM Vol. 3A §12.5.4](https://cdrdv2-public.intel.com/835754/253668-sdm-vol-3a.pdf)。
+停止不能撤销已进入 IRR/ISR 的中断；停止态忽略这类事件但仍发送 EOI。重新启动
+前检查 IRR、ISR 和 LVT delivery status，尚有旧事件时返回失败，调用方应在允许
+中断清理后重试。活动中再次启动也失败，不隐式替换现有定时器。配置与快照读取
+保存并恢复调用方的 IF 状态，不会无条件开中断。
+
+这仍是单 BSP、串行普通内核上下文的评估接口，短窗口测量不证明长期速率精度。
+尚未实现每 CPU 状态、TSC-deadline、ARAT/省电状态验证、调度与睡眠唤醒集成；
+不能据此宣称在真机深度休眠或 SMP 下可靠。默认 PIT 与软件定时器队列保持原路径。
 
 ## 早期定时器队列
 
@@ -79,6 +108,9 @@ python tools/scenectl.py smoke
 python tools/scenectl.py smoke --page-fault
 python tools/scenectl.py smoke --clock-check --timeout 10
 python tools/scenectl.py smoke --clock-check --tsc-clock --timeout 10
+python tools/scenectl.py smoke --lapic-timer --timeout 10
+python tools/scenectl.py smoke --lapic-timer --tsc-clock --timeout 10
+python tools/scenectl.py smoke --lapic-timer --pic --timeout 10
 ```
 
 默认测试必须看到 `Interrupt controller: Local APIC + IOAPIC`、PIT GSI、
@@ -92,3 +124,15 @@ IRQ 生命周期验证、单个已注册 handler、100 Hz 频率、至少三个�
 无测量及不支持的频率范围；只有通过才输出 `Clock diagnostic edge cases: verified`。
 当前默认 QEMU CPU 不枚举可用 CPUID.15H 频率，真实诊断为 `unavailable`。
 合成用例验证解析和分类逻辑，不代表已验证某款真机的 CPUID 频率。
+
+本地定时器自测覆盖算术边界、未初始化/非法/重复请求、周期交付后停止、单次仅交付
+一次及旧中断清理后重新启动；清理用例故意关闭 IF 等到中断 pending，再验证停止后
+立即启动被拒绝、恢复 IF 后旧事件不计数且可以重新启动。它还检查 PIT 继续前进、
+IRQ 注册数不变。`--tsc-clock` 禁用 HPET 路径，从而选择 PIT 校准；`--pic` 要求
+本地定时器报告不可用且 PIT 可继续运行。`--pic --keyboard` / `--pic --mouse`
+分别回归主 PIC 与级联从 PIC 的输入路由。smoke 遇到 `[PANIC]` 一律失败。
+
+有 HPET 时，自测额外用它实测八个 PIT tick 的速率，要求落在配置频率的
+75%–125% 内。此宽容差用于捕获倍频等明显错误，不是精度认证。旧控制字 `0x36`
+实际为 mode 3；本机 QEMU 的 IOAPIC 路径曾出现约两倍 tick 交付，使 PIT 校准
+频率约为 HPET 结果的一半，因此已改为预期的 mode 2 并保留该回归检查。

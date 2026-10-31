@@ -28,6 +28,13 @@ INTERRUPT_STUB irq
 %assign irq irq + 1
 %endrep
 
+; Keep vector 48 in sync with SCENE_LOCAL_TIMER_VECTOR in apic.h.
+global scene_local_timer_stub
+scene_local_timer_stub:
+    push qword 0
+    push qword 48
+    jmp scene_interrupt_common
+
 global scene_apic_spurious_stub
 scene_apic_spurious_stub:
     push qword 0

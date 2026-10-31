@@ -324,6 +324,8 @@ def command_configure(arguments: argparse.Namespace) -> None:
         "ON" if getattr(arguments, "tsc_clock", False) else "OFF"
     )
     clock_test = "ON" if getattr(arguments, "clock_check", False) else "OFF"
+    local_timer_test = "ON" if getattr(arguments, "lapic_timer", False) else "OFF"
+    force_pic = "ON" if getattr(arguments, "pic", False) else "OFF"
     configure_options = []
     if getattr(arguments, "fresh", False):
         # Validate the destination before CMake removes its generated cache.
@@ -340,6 +342,8 @@ def command_configure(arguments: argparse.Namespace) -> None:
             f"-DSCENEOS_MOUSE_SELF_TEST={mouse_test}",
             f"-DSCENEOS_FORCE_TSC_CLOCK={force_tsc_clock}",
             f"-DSCENEOS_CLOCK_SELF_TEST={clock_test}",
+            f"-DSCENEOS_LOCAL_TIMER_SELF_TEST={local_timer_test}",
+            f"-DSCENEOS_FORCE_PIC={force_pic}",
         ],
         environment=environment,
     )
@@ -649,6 +653,7 @@ def command_smoke(arguments: argparse.Namespace) -> None:
     clock_source = (
         "calibrated TSC" if arguments.tsc_clock else "HPET"
     )
+    interrupt_controller = "8259A PIC" if arguments.pic else "Local APIC + IOAPIC"
     if arguments.exception:
         expected = (
             "SceneOS kernel bootstrap",
@@ -661,7 +666,7 @@ def command_smoke(arguments: argparse.Namespace) -> None:
     elif arguments.page_fault:
         expected = (
             "SceneOS kernel bootstrap",
-            "Interrupt controller: Local APIC + IOAPIC",
+            f"Interrupt controller: {interrupt_controller}",
             "IRQ registration lifecycle: verified",
             "Registered IRQ handlers: 1",
             "Hardware timer ticks observed:",
@@ -680,7 +685,7 @@ def command_smoke(arguments: argparse.Namespace) -> None:
     elif arguments.keyboard:
         expected = (
             "SceneOS kernel bootstrap",
-            "Interrupt controller: Local APIC + IOAPIC",
+            f"Interrupt controller: {interrupt_controller}",
             "IRQ registration lifecycle: verified",
             "PS/2 keyboard: ready",
             "PS/2 mouse: ready",
@@ -697,7 +702,7 @@ def command_smoke(arguments: argparse.Namespace) -> None:
     elif arguments.mouse:
         expected = (
             "SceneOS kernel bootstrap",
-            "Interrupt controller: Local APIC + IOAPIC",
+            f"Interrupt controller: {interrupt_controller}",
             "IRQ registration lifecycle: verified",
             "PS/2 keyboard: ready",
             "PS/2 mouse: ready",
@@ -722,8 +727,7 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "Boot page-table root:",
             "SceneOS page-table root:",
             "SceneOS-owned page tables:",
-            "Interrupt controller: Local APIC + IOAPIC",
-            "PIT interrupt GSI:",
+            f"Interrupt controller: {interrupt_controller}",
             "IRQ registration lifecycle: verified",
             "Registered IRQ handlers: 1",
             "PS/2 keyboard: ready",
@@ -744,6 +748,8 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "Bootstrap complete",
         )
     if not arguments.exception:
+        if not arguments.pic:
+            expected += ("PIT interrupt GSI:",)
         expected += (
             "TSC calibration reference: PIT",
             "TSC measured frequency Hz:",
@@ -754,6 +760,25 @@ def command_smoke(arguments: argparse.Namespace) -> None:
         )
     if arguments.clock_check:
         expected += ("Clock diagnostic edge cases: verified",)
+    if arguments.lapic_timer:
+        expected += ("Local timer arithmetic boundaries: verified",)
+        if not arguments.tsc_clock:
+            expected += ("PIT cadence against HPET: verified",)
+        if arguments.pic:
+            expected += ("Local timer unavailable: PIT fallback verified",)
+        else:
+            reference = "PIT" if arguments.tsc_clock else "HPET"
+            expected += (
+                f"Local timer calibration reference: {reference}",
+                "Local timer counter frequency Hz:",
+                "Local timer periodic interrupts:",
+                "Local timer periodic delivery/stop: verified",
+                "Local timer one-shot delivery: verified",
+                "Local timer pending interrupt drain/rearm: verified",
+                "PIT compatibility ticks: verified",
+            )
+    if "[PANIC]" in output:
+        raise SceneCtlError("kernel panic during serial smoke test")
     missing = [text for text in expected if text not in output]
     if missing:
         raise SceneCtlError(
@@ -837,6 +862,11 @@ def parser() -> argparse.ArgumentParser:
     smoke.add_argument("--timeout", type=int, default=10)
     fault_tests = smoke.add_mutually_exclusive_group()
     fault_tests.add_argument(
+        "--lapic-timer",
+        action="store_true",
+        help="validate local timer calibration, delivery, stop, and rearm",
+    )
+    fault_tests.add_argument(
         "--clock-check",
         action="store_true",
         help="validate CPUID decoding and clock diagnostic boundary cases",
@@ -865,6 +895,11 @@ def parser() -> argparse.ArgumentParser:
         "--tsc-clock",
         action="store_true",
         help="disable HPET and validate the calibrated-TSC fallback",
+    )
+    smoke.add_argument(
+        "--pic",
+        action="store_true",
+        help="keep the legacy PIC controller and validate compatibility",
     )
     smoke.set_defaults(handler=command_smoke)
 

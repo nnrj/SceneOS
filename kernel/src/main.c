@@ -20,6 +20,10 @@
 #if defined(SCENEOS_CLOCK_SELF_TEST)
 #include "tests/clock.h"
 #endif
+#if defined(SCENEOS_LOCAL_TIMER_SELF_TEST)
+#include <scene/local_timer.h>
+#include "tests/local_timer.h"
+#endif
 
 static uint32_t timer_callback_results[2];
 static size_t timer_callback_count;
@@ -195,7 +199,7 @@ void kmain(void) {
 
     if (!scene_arch_interrupts_activate_apic(&boot_info)) {
         scene_log_line(
-            "APIC discovery unavailable; using 8259A compatibility path"
+            "APIC routing inactive; using 8259A compatibility path"
         );
     }
     scene_log_write("Interrupt controller: ");
@@ -288,6 +292,14 @@ void kmain(void) {
         scene_panic("Clock diagnostic edge-case test failed");
     }
     scene_log_line("Clock diagnostic edge cases: verified");
+#endif
+
+#if defined(SCENEOS_LOCAL_TIMER_SELF_TEST)
+    const bool local_timer_verified = scene_local_timer_self_test();
+    scene_local_timer_stop();
+    if (!local_timer_verified) {
+        scene_panic("Local timer self-test failed");
+    }
 #endif
 
     scene_timer_queue_init();

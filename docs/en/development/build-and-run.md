@@ -117,3 +117,24 @@ requested options explicitly.
 frequency decoding and diagnostic boundary cases. Add `--tsc-clock` to test
 the TSC fallback with these checks. Actual CPU diagnostics and synthetic edge
 cases are reported separately; see [interrupts and time](interrupts-and-time.md).
+
+Optional Local APIC timer acceptance:
+
+```powershell
+python tools/scenectl.py smoke --lapic-timer --timeout 10
+python tools/scenectl.py smoke --lapic-timer --tsc-clock --timeout 10
+python tools/scenectl.py smoke --lapic-timer --pic --timeout 10
+python tools/scenectl.py smoke --preset release --lapic-timer --timeout 10
+python tools/scenectl.py smoke --keyboard --pic --timeout 10
+python tools/scenectl.py smoke --mouse --pic --timeout 10
+```
+
+The first command calibrates against HPET. `--tsc-clock` selects PIT calibration
+with the TSC monotonic source. `--pic` forces the 8259A path: the local timer
+must report unavailable while PIT/input still work. That flag can combine with
+input or clock modes; `--lapic-timer` is exclusive with other focused self-tests.
+`SCENEOS_LOCAL_TIMER_SELF_TEST` and `SCENEOS_FORCE_PIC` both default to OFF.
+scenectl explicitly sets every test/force option on each configuration. A
+normal `build` or `smoke` restores defaults after testing; direct `cmake --build`
+retains cached options. Any `[PANIC]` makes smoke fail. CI configuration covers
+HPET/PIT local-timer checks, PIC fallback, and input compatibility paths.

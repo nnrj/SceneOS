@@ -5,6 +5,7 @@ set(SCENEOS_KERNEL_SOURCES
     src/core/input.c
     src/core/irq.c
     src/core/log.c
+    src/core/local_timer.c
     src/core/timer_queue.c
     src/memory/heap.c
     src/memory/physical.c
@@ -62,6 +63,15 @@ endif()
 if(SCENEOS_CLOCK_SELF_TEST)
     target_compile_definitions(scene-kernel PRIVATE SCENEOS_CLOCK_SELF_TEST=1)
     target_sources(scene-kernel PRIVATE src/tests/clock.c)
+endif()
+
+if(SCENEOS_LOCAL_TIMER_SELF_TEST)
+    target_compile_definitions(scene-kernel PRIVATE SCENEOS_LOCAL_TIMER_SELF_TEST=1)
+    target_sources(scene-kernel PRIVATE src/tests/local_timer.c)
+endif()
+
+if(SCENEOS_FORCE_PIC)
+    target_compile_definitions(scene-kernel PRIVATE SCENEOS_FORCE_PIC=1)
 endif()
 
 if(SCENEOS_KEYBOARD_SELF_TEST)

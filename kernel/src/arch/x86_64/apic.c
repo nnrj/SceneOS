@@ -1,5 +1,7 @@
 #include "acpi.h"
+#include "apic.h"
 
+#include <scene/arch.h>
 #include <scene/boot.h>
 #include <scene/paging.h>
 
@@ -24,6 +26,14 @@
 #define SCENE_LOCAL_APIC_LINT0 0x350U
 #define SCENE_LOCAL_APIC_LINT1 0x360U
 #define SCENE_LOCAL_APIC_ERROR 0x370U
+#define SCENE_LOCAL_APIC_INITIAL_COUNT 0x380U
+#define SCENE_LOCAL_APIC_CURRENT_COUNT 0x390U
+#define SCENE_LOCAL_APIC_DIVIDE 0x3e0U
+#define SCENE_LOCAL_APIC_ISR 0x100U
+#define SCENE_LOCAL_APIC_IRR 0x200U
+#define SCENE_LOCAL_APIC_DIVIDE_16 0x03U
+#define SCENE_LOCAL_APIC_PERIODIC (1U << 17U)
+#define SCENE_LOCAL_APIC_SEND_PENDING (1U << 12U)
 #define SCENE_LOCAL_APIC_MASKED (1U << 16U)
 #define SCENE_IO_APIC_VERSION 0x01U
 #define SCENE_IO_APIC_REDIRECTION_BASE 0x10U
@@ -237,7 +247,9 @@ bool scene_arch_apic_init(const struct scene_boot_info *boot_info) {
         SCENE_IA32_APIC_ENABLE;
     write_msr(SCENE_IA32_APIC_BASE_MSR, apic_base);
 
-    local_write(SCENE_LOCAL_APIC_TIMER, SCENE_LOCAL_APIC_MASKED);
+    local_write(SCENE_LOCAL_APIC_TIMER,
+        SCENE_LOCAL_APIC_MASKED | SCENE_LOCAL_TIMER_VECTOR);
+    local_write(SCENE_LOCAL_APIC_INITIAL_COUNT, 0);
     local_write(SCENE_LOCAL_APIC_CMCI, SCENE_LOCAL_APIC_MASKED);
     local_write(SCENE_LOCAL_APIC_THERMAL, SCENE_LOCAL_APIC_MASKED);
     local_write(SCENE_LOCAL_APIC_PERFORMANCE, SCENE_LOCAL_APIC_MASKED);
@@ -308,6 +320,19 @@ bool scene_arch_apic_set_irq(
     return true;
 }
 
+void scene_arch_apic_disable_for_pic(void) {
+    /* Firmware may leave the APIC enabled with the PIC's LINT0 path masked.
+     * Global disable lets the BSP accept legacy 8259A interrupts directly.
+     * This is a boot-time fallback, before any SceneOS IRQ is enabled. */
+    if (processor_has_apic()) {
+        const uint64_t apic_base = read_msr(SCENE_IA32_APIC_BASE_MSR);
+        write_msr(SCENE_IA32_APIC_BASE_MSR, apic_base & ~(
+            SCENE_IA32_APIC_ENABLE | SCENE_IA32_APIC_X2_ENABLE
+        ));
+    }
+    apic_ready = false;
+}
+
 void scene_arch_apic_eoi(void) {
     if (apic_ready) {
         local_write(SCENE_LOCAL_APIC_EOI, 0);
@@ -324,4 +349,54 @@ uint32_t scene_arch_apic_id(void) {
 
 uint32_t scene_arch_apic_timer_gsi(void) {
     return legacy_global_interrupts[0];
+}
+
+bool scene_arch_local_timer_available(void) {
+    return apic_ready;
+}
+
+bool scene_arch_local_timer_pending(void) {
+    if (!apic_ready) {
+        return false;
+    }
+    const uint32_t bank = (SCENE_LOCAL_TIMER_VECTOR / 32U) * 16U;
+    const uint32_t bit = UINT32_C(1) << (SCENE_LOCAL_TIMER_VECTOR % 32U);
+    return ((local_read(SCENE_LOCAL_APIC_IRR + bank) |
+        local_read(SCENE_LOCAL_APIC_ISR + bank)) & bit) != 0 ||
+        (local_read(SCENE_LOCAL_APIC_TIMER) &
+            SCENE_LOCAL_APIC_SEND_PENDING) != 0;
+}
+
+void scene_arch_local_timer_stop(void) {
+    if (apic_ready) {
+        local_write(SCENE_LOCAL_APIC_TIMER,
+            SCENE_LOCAL_TIMER_VECTOR | SCENE_LOCAL_APIC_MASKED);
+        local_write(SCENE_LOCAL_APIC_INITIAL_COUNT, 0);
+    }
+}
+
+bool scene_arch_local_timer_configure(
+    uint32_t initial_count, bool periodic, bool masked
+) {
+    if (!apic_ready || initial_count == 0 ||
+        scene_arch_local_timer_pending()) {
+        return false;
+    }
+    scene_arch_local_timer_stop();
+    local_write(SCENE_LOCAL_APIC_DIVIDE, SCENE_LOCAL_APIC_DIVIDE_16);
+    uint32_t control = SCENE_LOCAL_TIMER_VECTOR;
+    if (periodic) {
+        control |= SCENE_LOCAL_APIC_PERIODIC;
+    }
+    if (masked) {
+        control |= SCENE_LOCAL_APIC_MASKED;
+    }
+    local_write(SCENE_LOCAL_APIC_TIMER, control);
+    /* Initial count is written last; it is what starts the countdown. */
+    local_write(SCENE_LOCAL_APIC_INITIAL_COUNT, initial_count);
+    return true;
+}
+
+uint32_t scene_arch_local_timer_current_count(void) {
+    return apic_ready ? local_read(SCENE_LOCAL_APIC_CURRENT_COUNT) : 0;
 }

@@ -8,6 +8,16 @@ struct scene_boot_info;
 
 bool scene_arch_irq_enable(uint32_t irq);
 bool scene_arch_irq_disable(uint32_t irq);
+uint64_t scene_arch_interrupts_save(void);
+void scene_arch_interrupts_restore(uint64_t state);
+bool scene_arch_interrupts_enabled(void);
+bool scene_arch_local_timer_available(void);
+bool scene_arch_local_timer_pending(void);
+bool scene_arch_local_timer_configure(
+    uint32_t initial_count, bool periodic, bool masked
+);
+uint32_t scene_arch_local_timer_current_count(void);
+void scene_arch_local_timer_stop(void);
 bool scene_arch_hpet_init(const struct scene_boot_info *boot_info);
 bool scene_arch_hpet_ready(void);
 uint64_t scene_arch_hpet_counter(void);

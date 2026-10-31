@@ -46,7 +46,11 @@ observable completion criteria.
   complete)
 - CPUID/TSC frequency cross-checking, diagnostics, and boundary self-tests.
   (initial version complete)
-- Local APIC timer evaluation and dynamic timer capacity.
+- BSP Local APIC timer calibration against HPET/PIT, one-shot/periodic delivery,
+  stop and pending-interrupt drain, plus PIC compatibility regression.
+  (initial optional evaluation complete; PIT remains the default)
+- Local APIC timer scheduling/wakeup integration, power-state validation,
+  and dynamic timer capacity.
 - Keyboard layout/text translation, wheel negotiation, and dynamic input
   capacity.
 
