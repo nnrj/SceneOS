@@ -53,8 +53,10 @@ observable completion criteria.
   and dynamic timer capacity.
 - Minimal US keyboard layout, Shift/Caps rules, derived Unicode text events,
   and UTF-8 encoding. (initial version complete, on the input consumer side)
-- More layouts, input methods/composition, wheel negotiation, and dynamic
-  input capacity.
+- IntelliMouse wheel negotiation, three/four-byte packets, nine-bit motion
+  correction, and APIC/PIC input acceptance. (initial version complete)
+- More layouts, input methods/composition, extended mouse protocols, and
+  dynamic input capacity.
 
 ## M3: threads, processes, and user space
 

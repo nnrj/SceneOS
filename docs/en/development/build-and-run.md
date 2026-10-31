@@ -113,6 +113,15 @@ IRQ12-delivered pointer event. Neither input self-test changes the normal
 interactive build configuration permanently; the next configure selects the
 requested options explicitly.
 
+Full wheel acceptance uses `python tools/scenectl.py smoke --mouse-wheel --timeout 15`;
+three-byte compatibility uses `python tools/scenectl.py smoke --mouse-basic --timeout 15`.
+Both check negotiation/decoder boundaries before staged motion and three-button
+injection; wheel mode also checks both scroll directions. Add `--pic`,
+`--tsc-clock`, or `--preset release` as needed. These modes are mutually exclusive
+with other focused tests. `SCENEOS_MOUSE_PROTOCOL_SELF_TEST` and
+`SCENEOS_FORCE_BASIC_MOUSE` default to OFF. Normal builds probe IntelliMouse;
+only the basic test skips probing and requires device ID 0.
+
 Run `python tools/scenectl.py smoke --text-input --timeout 15` for text
 translation. It checks US layout/UTF-8 boundaries, injects key groups, and
 requires `aAAa!b Z` with no queue loss. Add `--pic`, `--tsc-clock`, or

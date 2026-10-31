@@ -65,6 +65,21 @@ jobs:
       - name: Validate mouse through cascaded legacy PIC
         run: python3 tools/scenectl.py smoke --mouse --pic --timeout 10
 
+      - name: Validate IntelliMouse wheel and packet boundaries
+        run: python3 tools/scenectl.py smoke --mouse-wheel --timeout 15
+
+      - name: Validate wheel through cascaded legacy PIC
+        run: python3 tools/scenectl.py smoke --mouse-wheel --pic --timeout 15
+
+      - name: Validate three-byte mouse compatibility
+        run: python3 tools/scenectl.py smoke --mouse-basic --timeout 15
+
+      - name: Validate three-byte mouse through legacy PIC
+        run: python3 tools/scenectl.py smoke --mouse-basic --pic --timeout 15
+
+      - name: Validate IntelliMouse in Release
+        run: python3 tools/scenectl.py smoke --preset release --mouse-wheel --timeout 15
+
       - name: Validate keyboard text and UTF-8
         run: python3 tools/scenectl.py smoke --text-input --timeout 15
 

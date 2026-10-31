@@ -29,10 +29,22 @@ ASCII 可打印子集。独立的 UTF-8 编码器支持 1–4 字节标量编码
 输入法处理。Unicode 组合、死键、AltGr、更多布局和输入法仍属于后续文本服务。
 PS/2 当前仍不支持 Pause/Print Screen 特殊序列、LED、热插拔恢复或多键盘。
 
-共享控制器层启用 i8042 双端口，并校验命令响应是否来自指定设备。鼠标恢复默认
-配置并开启流模式，在 IRQ12 中组装有同步标志的三字节包，丢弃溢出包，把 PS/2
-向上为正的 Y 转换成屏幕坐标向下为正，并发布相对位移以及左、右、中键的当前与
-变化状态。滚轮协商和四字节包尚未实现。
+共享控制器层启用 i8042 双端口，并校验命令响应是否来自指定设备。命令及数据
+轮询只用于 IF 关闭的启动初始化；运行期调用会失败，避免与 IRQ 抢读响应。
+启动期仍会丢弃来自另一端口的陈旧输出，不提供并发事务或热插拔恢复。
+
+鼠标先恢复默认配置并停流，再按 200、100、80 的采样率序列探测 IntelliMouse，
+最后查询设备 ID：0 使用三字节，3 使用四字节。流程及字段依据
+[Microsoft 的 PS/2 鼠标协议说明](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/keyboard-and-mouse-hid-client-drivers#activating-buttons-4-5-and-wheel-on-ps2-mice)。
+每个命令和参数都要求 ACK；控制器保留最多三次 RESEND 尝试。未知 ID、超时或
+命令失败会使初始化失败，不猜测包长。只在协议确定、IRQ12 注册后开启流模式。
+
+独立协议解码器跨 IRQ 保存部分包，只在包头检查同步位，丢弃溢出包并保留之前的
+按键状态。X/Y 按包头符号位和数据字节组成的九位值解析，Y 转为向下为正。
+第四字节为完整八位有符号滚轮值，转换后 `wheel_delta` 正值向上、负值向下，
+单位为设备滚轮步数。左、右、中键当前值和变化掩码保持原契约。无变化包计入
+接收包数但不入队；队列满仍更新设备当前按钮状态，消费者应结合丢失计数恢复。
+五键 Explorer ID 4、水平滚轮、绝对坐标和丢字节后的完整重同步仍未实现。
 
 执行 `python tools/scenectl.py smoke --keyboard --timeout 10` 会构建自测内核，
 并通过 QEMU Monitor 注入 `A`。测试通过表示模拟设备、IRQ1 路由、解码器和队列
@@ -40,6 +52,25 @@ PS/2 当前仍不支持 Pause/Print Screen 特殊序列、LED、热插拔恢复�
 
 执行 `python tools/scenectl.py smoke --mouse --timeout 10` 可注入相对移动，验证
 控制器第二端口、IRQ12 路由、数据包解码和指针事件整条链路。
+
+滚轮和三字节兼容验收：
+
+```powershell
+python tools/scenectl.py smoke --mouse-wheel --timeout 15
+python tools/scenectl.py smoke --mouse-wheel --pic --timeout 15
+python tools/scenectl.py smoke --mouse-basic --timeout 15
+python tools/scenectl.py smoke --mouse-basic --pic --timeout 15
+python tools/scenectl.py smoke --preset release --mouse-wheel --timeout 15
+```
+
+两种自测都验证协商成功/失败、ID 0 回退、未知 ID、全部九位 X/Y 和八位滚轮值、
+按键转换、部分包及溢出包。随后按就绪标记注入双向移动、三键按下/释放；滚轮
+模式再注入双向滚动，分别要求 7 / 9 个事件、正确字段和零丢失。HMP `mouse_move`
+的 dz 正值表示向上，与 PS/2 线上的滚轮字节方向相反，参见
+[QEMU HMP 实现](https://github.com/qemu/qemu/blob/master/ui/ui-hmp-cmds.c)。
+`--mouse-basic` 跳过协商且要求查询结果为 ID 0，用于全新 QEMU 的兼容路径，
+不会把已经处于四字节模式的设备强行当作三字节。无滚轮设备拒绝切换的回退由
+脚本化传输测试覆盖；这不等于真机验证。普通构建默认探测滚轮，关闭所有自测。
 
 文本路径验收：
 

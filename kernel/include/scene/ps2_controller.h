@@ -13,10 +13,12 @@ enum scene_ps2_device {
 };
 
 bool scene_ps2_controller_init(void);
+/* Boot-time polling only, with interrupts disabled. */
 bool scene_ps2_device_command(
     enum scene_ps2_device device,
     uint8_t command
 );
+bool scene_ps2_device_read(enum scene_ps2_device device, uint8_t *value);
 uint8_t scene_ps2_status(void);
 uint8_t scene_ps2_read_data(void);
 

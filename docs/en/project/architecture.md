@@ -104,6 +104,9 @@ Ctrl/Alt suppression, and encodes Unicode scalars as UTF-8. It generates no
 characters inside IRQ handlers and never writes text back into the raw input
 queue. More layouts, dead keys, input methods, and composition remain pending.
 A shared i8042 controller layer also
-enables the second port; the mouse driver consumes three-byte packets on IRQ12
-and publishes relative motion and button-change state. Wheel negotiation,
-absolute devices, and multi-consumer routing are not implemented yet.
+enables the second port. The mouse probes IntelliMouse during boot and consumes
+three/four-byte packets on IRQ12 according to the actual ID, publishing nine-bit
+relative motion, three-button changes, and positive-up scrolling. Protocol
+decoding can be tested independently; command polling is boot-only with IF
+clear. Five buttons, horizontal scrolling, absolute input, and multi-consumer
+routing remain unsupported.

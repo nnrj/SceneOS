@@ -27,6 +27,9 @@
 #if defined(SCENEOS_TEXT_INPUT_SELF_TEST)
 #include "tests/text_input.h"
 #endif
+#if defined(SCENEOS_MOUSE_PROTOCOL_SELF_TEST)
+#include "tests/ps2_mouse.h"
+#endif
 
 static uint32_t timer_callback_results[2];
 static size_t timer_callback_count;
@@ -246,6 +249,9 @@ void kmain(void) {
         scene_panic("PS/2 mouse initialization failed");
     }
     scene_log_line("PS/2 mouse: ready");
+    scene_log_line(scene_ps2_mouse_has_wheel()
+        ? "PS/2 mouse protocol: IntelliMouse (4 bytes)"
+        : "PS/2 mouse protocol: standard (3 bytes)");
     scene_log_u64(
         "Registered IRQ handlers after input: ",
         scene_irq_registered_count()
@@ -491,6 +497,12 @@ void kmain(void) {
 #if defined(SCENEOS_TEXT_INPUT_SELF_TEST)
     if (!scene_text_input_self_test()) {
         scene_panic("Text input self-test failed");
+    }
+#endif
+
+#if defined(SCENEOS_MOUSE_PROTOCOL_SELF_TEST)
+    if (!scene_ps2_mouse_self_test()) {
+        scene_panic("PS/2 mouse protocol self-test failed");
     }
 #endif
 

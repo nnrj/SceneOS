@@ -6,7 +6,7 @@ The current kernel-private API is declared in `scene/input.h`.
   before input drivers attach.
 - `scene_input_push_key(event)` validates and queues a semantic key event. It
   returns false for invalid input or overflow.
-- `scene_input_push_pointer(event)` queues relative motion or button changes.
+- `scene_input_push_pointer(event)` queues relative motion, scrolling, or button changes.
   It returns false for null, no-op, or overflowing events.
 - `scene_input_pop(event)` removes the oldest event and returns false when the
   queue is empty or the destination is null.
@@ -22,13 +22,26 @@ meaning, not text or Unicode.
 A pointer payload contains signed `delta_x`, `delta_y`, and `wheel_delta`, plus
 the current `buttons` mask and a `changed_buttons` mask. Positive X means right
 and positive Y means down. Consumers detect presses and releases by combining
-the current and changed masks. Wheel delta is reserved and currently always
-zero for the three-byte PS/2 mouse.
+the current and changed masks. `wheel_delta` counts device detents, positive up
+and negative down, rather than pixels or text lines. It is zero for three-byte
+mice; IntelliMouse ID 3 publishes the fourth-byte wheel displacement. Scaling,
+acceleration, and scrolling policy belong to the consumer.
 
 The PS/2 headers expose initialization and diagnostic received counters.
 Applications and future drivers should consume input events rather than PS/2
 scan codes or packets. These are pre-stable kernel interfaces and may evolve
 together with all in-tree callers.
+
+`scene_ps2_mouse_init()` is boot-only with IF clear; repeat initialization or
+enabled interrupts return false. It probes wheels and selects the actual
+packet length; unknown IDs or communication failures do not guess a fallback.
+`scene_ps2_mouse_has_wheel()` reports ID 3 after successful initialization and
+is false beforehand. `scene_ps2_mouse_packets()` counts complete non-overflow
+packets, including unqueued no-change packets. `scene_ps2_device_command()` and
+`scene_ps2_device_read(device, value)` also require IF clear. Invalid devices,
+null read destinations, and timeouts fail; failed reads preserve output. They
+are not concurrent runtime transaction APIs. Button snapshots advance even if
+the queue drops an event; change masks do not replay missing events.
 
 ## Key-to-text translation
 

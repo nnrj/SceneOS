@@ -1,3 +1,4 @@
+#include <scene/arch.h>
 #include <scene/ps2_controller.h>
 
 #include <stdbool.h>
@@ -92,7 +93,8 @@ static void flush_output(void) {
 }
 
 bool scene_ps2_controller_init(void) {
-    if (!write_controller_command(SCENE_PS2_DISABLE_FIRST_PORT) ||
+    if (scene_arch_interrupts_enabled() ||
+        !write_controller_command(SCENE_PS2_DISABLE_FIRST_PORT) ||
         !write_controller_command(SCENE_PS2_DISABLE_SECOND_PORT)) {
         return false;
     }
@@ -119,14 +121,18 @@ bool scene_ps2_device_command(
     enum scene_ps2_device device,
     uint8_t command
 ) {
+    if (scene_arch_interrupts_enabled() ||
+        (device != SCENE_PS2_DEVICE_KEYBOARD && device != SCENE_PS2_DEVICE_MOUSE)) {
+        return false;
+    }
     const bool auxiliary = device == SCENE_PS2_DEVICE_MOUSE;
     for (size_t attempt = 0; attempt < 3U; ++attempt) {
+        uint8_t response;
         if ((auxiliary &&
             !write_controller_command(SCENE_PS2_WRITE_SECOND_PORT)) ||
-            !write_data(command) || !wait_output_ready(auxiliary)) {
+            !write_data(command) || !scene_ps2_device_read(device, &response)) {
             return false;
         }
-        const uint8_t response = scene_ps2_read_data();
         if (response == SCENE_PS2_ACKNOWLEDGE) {
             return true;
         }
@@ -135,4 +141,14 @@ bool scene_ps2_device_command(
         }
     }
     return false;
+}
+
+bool scene_ps2_device_read(enum scene_ps2_device device, uint8_t *value) {
+    if (value == 0 || scene_arch_interrupts_enabled() ||
+        (device != SCENE_PS2_DEVICE_KEYBOARD && device != SCENE_PS2_DEVICE_MOUSE) ||
+        !wait_output_ready(device == SCENE_PS2_DEVICE_MOUSE)) {
+        return false;
+    }
+    *value = scene_ps2_read_data();
+    return true;
 }

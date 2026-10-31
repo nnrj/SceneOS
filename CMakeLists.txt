@@ -15,5 +15,7 @@ option(SCENEOS_FORCE_PIC "Keep the legacy PIC path for compatibility tests" OFF)
 option(SCENEOS_KEYBOARD_SELF_TEST "Wait for an injected PS/2 A key" OFF)
 option(SCENEOS_TEXT_INPUT_SELF_TEST "Validate key-to-text translation and UTF-8" OFF)
 option(SCENEOS_MOUSE_SELF_TEST "Wait for injected PS/2 mouse motion" OFF)
+option(SCENEOS_MOUSE_PROTOCOL_SELF_TEST "Validate PS/2 packets, buttons and wheel" OFF)
+option(SCENEOS_FORCE_BASIC_MOUSE "Skip wheel probing and require a three-byte mouse" OFF)
 
 add_subdirectory(kernel)

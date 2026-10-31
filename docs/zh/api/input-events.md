@@ -5,7 +5,7 @@
 - `scene_input_init()`：重置队列状态和序列号；输入驱动注册前调用一次。
 - `scene_input_push_key(event)`：校验并加入语义按键事件；参数无效或溢出时返回
   false。
-- `scene_input_push_pointer(event)`：加入相对移动或按键变化；空指针、无变化事件
+- `scene_input_push_pointer(event)`：加入相对移动、滚轮或按键变化；空指针、无变化事件
   或队列溢出时返回 false。
 - `scene_input_pop(event)`：移除最早事件；队列为空或目标为空时返回 false。
 - `scene_input_pending()`：返回当前积压事件数。
@@ -18,12 +18,21 @@
 
 指针 payload 包含有符号 `delta_x`、`delta_y`、`wheel_delta`，以及当前
 `buttons` 和 `changed_buttons` 位掩码。X 正值表示向右，Y 正值表示向下；消费
-者结合当前值和变化位即可区分按下与释放。滚轮增量是预留接口，对当前三字节
-PS/2 鼠标始终为零。
+者结合当前值和变化位即可区分按下与释放。`wheel_delta` 的单位为设备滚轮步数，
+正值向上、负值向下，不是像素或文本行数；三字节鼠标始终为零，IntelliMouse
+ID 3 发布四字节包中的滚轮增量。缩放、加速度和滚动策略由消费者决定。
 
 PS/2 相关头文件暴露初始化接口和诊断用接收计数。应用与未来驱动应消费输入
 事件，而不是依赖 PS/2 扫描码或数据包。这些接口尚未稳定，可与仓库内所有调用
 者一同演进。
+
+`scene_ps2_mouse_init()` 仅用于 IF 关闭的启动阶段，重复初始化或已启用中断时
+返回 false。它探测滚轮并选择实际包长；未知 ID 或通信失败不降级猜测。
+`scene_ps2_mouse_has_wheel()` 在成功初始化后说明是否为 ID 3，初始化前为 false。
+`scene_ps2_mouse_packets()` 统计完整且未溢出的包，包括未入队的无变化包。
+`scene_ps2_device_command()` 和 `scene_ps2_device_read(device, value)` 同样要求
+IF 关闭；错误设备、空读取目标或超时会失败，失败读取不修改输出。它们不是可在
+运行期并发调用的事务 API。队列丢失时按钮快照仍更新，变化掩码不补发丢失事件。
 
 ## 按键到文本
 

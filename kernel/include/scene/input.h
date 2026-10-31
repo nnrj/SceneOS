@@ -121,7 +121,7 @@ struct scene_key_event {
 struct scene_pointer_event {
     int32_t delta_x;
     int32_t delta_y;
-    int32_t wheel_delta;
+    int32_t wheel_delta; /* Relative detents: positive up, negative down. */
     uint8_t buttons;
     uint8_t changed_buttons;
 };

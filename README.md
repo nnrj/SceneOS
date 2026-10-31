@@ -15,7 +15,8 @@ with a calibrated-TSC fallback and CPUID frequency diagnostics, offers an
 optional BSP Local APIC timer with one-shot/periodic validation, dispatches
 hardware lines through a fixed IRQ registry, provides fixed-capacity timer and
 input queues, decodes a PS/2 keyboard through IRQ1 and a PS/2 mouse through
-IRQ12, translates semantic keys through a minimal US layout into Unicode text
+IRQ12 with IntelliMouse wheel negotiation and three-byte fallback, translates
+semantic keys through a minimal US layout into Unicode text
 with UTF-8 encoding, and draws a simple framebuffer scene.
 
 ## Quick start

@@ -321,6 +321,10 @@ def command_configure(arguments: argparse.Namespace) -> None:
     )
     text_input_test = "ON" if getattr(arguments, "text_input", False) else "OFF"
     mouse_test = "ON" if getattr(arguments, "mouse", False) else "OFF"
+    mouse_protocol_test = "ON" if (
+        getattr(arguments, "mouse_wheel", False) or getattr(arguments, "mouse_basic", False)
+    ) else "OFF"
+    force_basic_mouse = "ON" if getattr(arguments, "mouse_basic", False) else "OFF"
     force_tsc_clock = (
         "ON" if getattr(arguments, "tsc_clock", False) else "OFF"
     )
@@ -342,6 +346,8 @@ def command_configure(arguments: argparse.Namespace) -> None:
             f"-DSCENEOS_KEYBOARD_SELF_TEST={keyboard_test}",
             f"-DSCENEOS_TEXT_INPUT_SELF_TEST={text_input_test}",
             f"-DSCENEOS_MOUSE_SELF_TEST={mouse_test}",
+            f"-DSCENEOS_MOUSE_PROTOCOL_SELF_TEST={mouse_protocol_test}",
+            f"-DSCENEOS_FORCE_BASIC_MOUSE={force_basic_mouse}",
             f"-DSCENEOS_FORCE_TSC_CLOCK={force_tsc_clock}",
             f"-DSCENEOS_CLOCK_SELF_TEST={clock_test}",
             f"-DSCENEOS_LOCAL_TIMER_SELF_TEST={local_timer_test}",
@@ -593,6 +599,7 @@ def command_smoke(arguments: argparse.Namespace) -> None:
     ]
     interactive_input_test = (
         arguments.keyboard or arguments.mouse or arguments.text_input
+        or arguments.mouse_wheel or arguments.mouse_basic
     )
     if interactive_input_test:
         command.extend(["-monitor", "stdio"])
@@ -618,6 +625,19 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             injections = tuple(
                 (f"Waiting for text input step: {index}", f"sendkey {key} 30\n")
                 for index, key in enumerate(keys)
+            )
+        elif arguments.mouse_wheel or arguments.mouse_basic:
+            commands = (
+                "mouse_move 12 7", "mouse_move -9 -4",
+                "mouse_button 1", "mouse_button 3", "mouse_button 7", "mouse_button 0",
+                "mouse_move 6 -3",
+            )
+            if arguments.mouse_wheel:
+                # HMP dz uses positive for wheel-up, unlike the PS/2 wire byte.
+                commands += ("mouse_move 0 0 1", "mouse_move 0 0 -1")
+            injections = tuple(
+                (f"Waiting for mouse protocol step: {index}", f"{command}\n")
+                for index, command in enumerate(commands)
             )
         elif arguments.keyboard:
             injections = (("Waiting for injected PS/2 key A", "sendkey a\n"),)
@@ -785,6 +805,19 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "Text key presses/releases and shortcuts: verified",
             "PS/2 text input: verified",
         )
+    if arguments.mouse_wheel or arguments.mouse_basic:
+        protocol = "standard (3 bytes)" if arguments.mouse_basic else "IntelliMouse (4 bytes)"
+        count = 7 if arguments.mouse_basic else 9
+        verification = "basic motion/buttons" if arguments.mouse_basic else "wheel/motion/buttons"
+        expected += (
+            f"PS/2 mouse protocol: {protocol}",
+            "PS/2 mouse negotiation/fallback failures: verified",
+            "PS/2 mouse packet/sign/button boundaries: verified",
+            "PS/2 runtime polling rejection: verified",
+            f"PS/2 pointer event count: {count}",
+            "Input events dropped: 0",
+            f"PS/2 {verification}: verified",
+        )
     if arguments.lapic_timer:
         expected += ("Local timer arithmetic boundaries: verified",)
         if not arguments.tsc_clock:
@@ -920,6 +953,16 @@ def parser() -> argparse.ArgumentParser:
         "--mouse",
         action="store_true",
         help="inject motion through QEMU and validate PS/2 pointer delivery",
+    )
+    fault_tests.add_argument(
+        "--mouse-wheel",
+        action="store_true",
+        help="validate IntelliMouse negotiation, packet boundaries, buttons and scrolling",
+    )
+    fault_tests.add_argument(
+        "--mouse-basic",
+        action="store_true",
+        help="skip wheel negotiation and validate three-byte motion and buttons",
     )
     smoke.add_argument(
         "--tsc-clock",

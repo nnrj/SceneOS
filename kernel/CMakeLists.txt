@@ -14,6 +14,7 @@ set(SCENEOS_KERNEL_SOURCES
     src/drivers/input/ps2_keyboard.c
     src/drivers/input/ps2_controller.c
     src/drivers/input/ps2_mouse.c
+    src/drivers/input/ps2_mouse_protocol.c
     src/arch/x86_64/descriptors.c
     src/arch/x86_64/exceptions.c
     src/arch/x86_64/acpi.c
@@ -90,6 +91,15 @@ if(SCENEOS_MOUSE_SELF_TEST)
     target_compile_definitions(scene-kernel PRIVATE
         SCENEOS_MOUSE_SELF_TEST=1
     )
+endif()
+
+if(SCENEOS_MOUSE_PROTOCOL_SELF_TEST)
+    target_compile_definitions(scene-kernel PRIVATE SCENEOS_MOUSE_PROTOCOL_SELF_TEST=1)
+    target_sources(scene-kernel PRIVATE src/tests/ps2_mouse.c)
+endif()
+
+if(SCENEOS_FORCE_BASIC_MOUSE)
+    target_compile_definitions(scene-kernel PRIVATE SCENEOS_FORCE_BASIC_MOUSE=1)
 endif()
 
 target_compile_options(scene-kernel PRIVATE

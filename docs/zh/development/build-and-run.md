@@ -108,6 +108,13 @@ QEMU 串口应输出 `SceneOS kernel bootstrap`、GDT/TSS/IDT、bootloader、内
 它通过 QEMU Monitor 发送相对移动，并要求 IRQ12 交付指针事件。两种输入自测都
 不会永久改变普通交互构建；下一次 configure 会显式选择本次所需选项。
 
+滚轮完整验收为 `python tools/scenectl.py smoke --mouse-wheel --timeout 15`；
+三字节兼容验收为 `python tools/scenectl.py smoke --mouse-basic --timeout 15`。
+两者先测试协商与解码边界，再分步注入移动和三键状态，滚轮模式还检查双向滚动。
+支持追加 `--pic`、`--tsc-clock` 或 `--preset release`，与其他专项自测互斥。
+`SCENEOS_MOUSE_PROTOCOL_SELF_TEST`、`SCENEOS_FORCE_BASIC_MOUSE` 默认 OFF；普通
+构建会探测 IntelliMouse，三字节自测才跳过探测并要求设备 ID 为 0。
+
 文本转换验收使用 `python tools/scenectl.py smoke --text-input --timeout 15`。
 它先验证 US 布局和 UTF-8 边界，再逐组注入按键，要求文本为 `aAAa!b Z` 且队列
 无丢失。可追加 `--pic`、`--tsc-clock` 或 `--preset release` 验证兼容/优化路径。

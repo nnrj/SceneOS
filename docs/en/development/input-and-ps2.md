@@ -41,12 +41,30 @@ AltGr, more layouts, and input methods remain future text-service work. PS/2
 still lacks Pause/Print Screen sequences, LEDs, hot-plug recovery, and multiple
 keyboards.
 
-The shared controller layer enables both i8042 ports and verifies whether each
-command response came from the requested device. The mouse enables defaults
-and streaming, assembles synchronized three-byte packets on IRQ12, rejects
-overflow packets, converts PS/2 Y-up motion to screen-style Y-down motion, and
-publishes relative deltas plus current/changed left, right, and middle buttons.
-Wheel negotiation and four-byte packets are not implemented yet.
+The shared controller enables both i8042 ports and verifies response origin.
+Command/data polling is limited to boot initialization with IF clear; runtime
+calls fail instead of racing IRQ readers. Boot polling still discards stale
+output from the other port; concurrent transactions and hot-plug recovery are
+not provided.
+
+The mouse restores defaults with streaming disabled, probes IntelliMouse with
+sample rates 200, 100, 80, then queries its ID: 0 selects three-byte packets,
+3 selects four. The sequence and fields follow
+[Microsoft's PS/2 protocol description](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/keyboard-and-mouse-hid-client-drivers#activating-buttons-4-5-and-wheel-on-ps2-mice).
+Every command/argument needs an ACK; the controller retains up to three RESEND
+attempts. Unknown IDs, timeouts, and command errors fail initialization without
+guessing packet length. Streaming starts after protocol selection and IRQ12
+registration.
+
+A separate decoder retains partial packets across IRQs, checks the tag only at
+packet start, and rejects overflow packets without changing prior button state.
+X/Y use the header sign and data byte as a nine-bit value, with Y converted to
+positive-down. The fourth byte is a full signed eight-bit wheel value, converted
+to positive-up/negative-down device detents in `wheel_delta`. Current/changed
+left, right, and middle button masks retain their contract. No-change packets
+count as received but are not queued. A full queue still advances device button
+state; consumers must account for the drop counter. Explorer ID 4, horizontal
+scrolling, absolute input, and full recovery after lost bytes remain unsupported.
 
 Use `python tools/scenectl.py smoke --keyboard --timeout 10` to build the
 self-test kernel and inject `A` with QEMU Monitor. Success proves the emulator
@@ -55,6 +73,29 @@ device, IRQ1 route, decoder, and queue as one path.
 Use `python tools/scenectl.py smoke --mouse --timeout 10` to inject relative
 motion and prove the second controller port, IRQ12 route, packet decoder, and
 pointer-event path.
+
+Wheel and three-byte compatibility acceptance:
+
+```powershell
+python tools/scenectl.py smoke --mouse-wheel --timeout 15
+python tools/scenectl.py smoke --mouse-wheel --pic --timeout 15
+python tools/scenectl.py smoke --mouse-basic --timeout 15
+python tools/scenectl.py smoke --mouse-basic --pic --timeout 15
+python tools/scenectl.py smoke --preset release --mouse-wheel --timeout 15
+```
+
+Both tests cover negotiation success/failure, ID 0 fallback, unknown IDs, all
+nine-bit X/Y and eight-bit wheel values, button transitions, partial packets,
+and overflow. Readiness markers then gate bidirectional motion and three-button
+press/release injection. Wheel mode also injects both scroll directions. The
+tests require 7 / 9 events respectively, exact fields, and no loss. HMP
+`mouse_move` uses positive dz for up, opposite to the PS/2 wire byte; see the
+[QEMU HMP implementation](https://github.com/qemu/qemu/blob/master/ui/ui-hmp-cmds.c).
+`--mouse-basic` skips probing and requires reported ID 0 for compatibility tests
+in a fresh QEMU; it never treats an existing four-byte mode as three-byte.
+Fallback for a device that declines wheel activation is covered by scripted
+transport tests, not physical hardware. Normal builds probe wheels and disable
+all self-tests.
 
 Text-path acceptance:
 

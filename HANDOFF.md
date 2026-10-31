@@ -16,15 +16,15 @@
    git log -5 --oneline
    ```
 
-3. 预期分支为 `master`，本次文本层开发的基准提交为（最新 HEAD 以 Git 为准）：
+3. 预期分支为 `master`，本次滚轮开发的基准提交为（最新 HEAD 以 Git 为准）：
 
    ```text
-   7e3c674 feat: add BSP local timer and harden PIT/PIC paths
+   777c1bd feat: add US keyboard text translation and UTF-8
    ```
 
    用户已推送此前的迁移恢复、时钟诊断和 Git 忽略规则改动（`f094ef3`）。
-   Local APIC timer 与 PIC/PIT 修复已提交为 `7e3c674`；随后开展文本输入阶段，
-   实现与验证见下文。用户已授权完成验证后执行 `git add .` 和 `git commit`
+   Local APIC timer 与 PIC/PIT 修复为 `7e3c674`，文本输入为 `777c1bd`；
+   后续滚轮与线程开发的实现、验证见下文。用户已授权完成验证后执行 `git add .` 和 `git commit`
    保存阶段性成果，不推送远端。提交与工作树状态以实际 Git 为准。
 
 4. 先阅读本文以及：
@@ -97,19 +97,21 @@
 - 固定 32 项小顶堆定时器队列，支持调度、取消和非 IRQ 上下文回调。
 - 共享 i8042 控制器层。
 - PS/2 Set 1 键盘：IRQ1、语义键码、左右修饰键、Caps Lock、按下/释放/重复。
-- PS/2 三字节鼠标：IRQ12、相对移动、左/右/中键当前值和变化掩码。
+- PS/2 鼠标：IRQ12、IntelliMouse ID 3 滚轮协商、ID 0 三字节兼容、九位 X/Y
+  相对移动、左/右/中键当前值和变化掩码；正值滚轮向上。
 - 固定容量统一输入事件队列，带序列号和丢失计数。
 - 消费者侧最小 US 键盘布局、Shift/Caps 规则、Ctrl/Alt 文本抑制、派生 Unicode
   文本事件及 UTF-8 编码；文本携带原始事件序列号与重复标志，不回写硬件队列。
 
 当前输入队列依赖单 BSP、可屏蔽中断 handler 不嵌套和 x86 有序内存模型，尚不
-是 SMP 安全通用队列。更多布局、死键/AltGr、输入法与组合文本、鼠标滚轮协商、
+是 SMP 安全通用队列。更多布局、死键/AltGr、输入法与组合文本、五键/水平滚轮、
 绝对坐标设备、焦点路由和多消费者分发尚未实现。普通启动没有文本框或终端，
 文本转换目前由独立验收消费者使用；UTF-8 编码能力不等于中文输入法已完成。
 
 ## 最近关键提交
 
 ```text
+777c1bd feat: add US keyboard text translation and UTF-8
 7e3c674 feat: add BSP local timer and harden PIT/PIC paths
 f094ef3 update
 c8a57cb update
@@ -252,13 +254,48 @@ python tools/scenectl.py smoke --mouse --timeout 10
   UTF-8 解码、Unicode 规范化、真机或远端 CI 验证。
 - 按用户授权在完成验证后本地提交本阶段成果；提交记录以 Git 为准，不 push。
 
+### 2026-10-31 IntelliMouse 滚轮与位移修复
+
+- 鼠标启动默认按 200/100/80 探测并查询实际 ID，0/3 分别选择三/四字节；未知
+  ID 或通信失败停止初始化。协议层与端口操作分开，命令/数据轮询拒绝 IF 开启
+  时调用。成功注册 IRQ12 后才开启流模式，失败时注销本次 handler。
+- 修复旧 X/Y `(int8_t)` 转换丢失包头符号位的问题，覆盖 -256 到 255 的九位值；
+  ID 3 的第四字节按完整有符号八位解析，输入事件滚轮正值向上。保留溢出包丢弃、
+  部分包跨 IRQ、三键快照、无变化包过滤和固定容量队列。
+- 新增 `smoke --mouse-wheel`、`--mouse-basic`，均支持 PIC/TSC/Release。自测涵盖
+  协商每一步失败、ID 0 回退、未知 ID、X/Y 和滚轮全值域、按键状态转换与溢出包；
+  实际 QEMU 依次注入移动、三键按下/释放和双向滚轮，要求 9 / 7 个事件且零丢失。
+- 基线通过，最终 13 组 QEMU 回归全部通过，日志在
+  `build/verify/mouse-wheel-20261031/final/`：
+
+  | 配置 | 路径 | 组数 |
+  | --- | --- | --- |
+  | Dev | `--mouse-wheel`，分别使用 APIC、PIC、TSC | 3 |
+  | Release | `--mouse-wheel`，分别使用 APIC、PIC | 2 |
+  | Dev / Release | `--mouse-basic`（Dev 另加 PIC） | 3 |
+  | Dev | `--text-input`，分别使用 APIC、PIC | 2 |
+  | Dev | 原 `--mouse` | 1 |
+  | Dev / Release | 普通 `smoke` | 2 |
+
+- 最终用例均为 15 秒上限。首轮测试发现 HMP dz 的正值实际表示向上，已按 QEMU
+  官方实现校正测试注入，驱动方向契约不变。初次失败证据为父目录 `dev-wheel-*`；
+  `dev-wheel-diagnostic-run.log` 是诊断日志函数名误写导致的编译失败，其同名
+  serial 文件是前一次运行副本，不作为独立运行证据。
+- 临时恢复旧八位 X 解码的负向测试被边界用例按预期拒绝，证据为父目录
+  `old-sign-negative-*`。脚本 finally 恢复正确源文件并重新执行普通 Dev smoke。
+- CI 与中英文项目/开发/API 文档同步；Python 语法、参数互斥、文档结构与链接、
+  `git diff --check` 通过。正常配置会关闭 11 个自测/强制模式开关。
+- QEMU 四字节路径与跳过探测的三字节路径已验证；不支持滚轮的设备对探测返回
+  ID 0 的场景由脚本化传输覆盖，不等于真机测试。Explorer ID 4、水平滚轮、
+  热插拔和丢字节恢复仍待实现。未运行远端 CI、ISO 或真机。
+
 ## 建议下一步
 
-优先继续 M2，不要过早进入完整桌面：
+继续进入 M3 的内核线程基础，不要过早进入完整桌面：
 
-1. 增加 PS/2 IntelliMouse 滚轮协商与四字节包测试。
-2. 随后再决定进入 M3（线程/用户态）还是先做一个仅内核期的可见光标原型；正式
-   窗口系统仍应按路线图置于用户态。
+1. 实现 BSP 协作式内核线程、独立保护栈、软件上下文切换与退出回收，增加 QEMU
+   调度/寄存器/栈隔离验收，再推进抢占、等待队列及用户态。
+2. 正式窗口系统仍按路线图置于用户态；当前不插入内核期可见光标原型。
 3. 文本消费者/终端形成时，再按交互需要选择布局、焦点和编辑动作策略；不把
    输入法、组合文本或布局规则放入 PS/2 驱动。
 4. 进入调度/唤醒阶段时，再将本地定时器接入时钟事件源选择与 deadline 编程；
@@ -266,7 +303,7 @@ python tools/scenectl.py smoke --mouse --timeout 10
 
 每个阶段都应同步：实现、自动化 QEMU 验收、CI、中英文项目/开发/API 文档。
 用户已授权在适当阶段执行 `git add .` 与 `git commit`，完成必要验收后可直接
-提交阶段成果；不执行 push。
+提交阶段成果；不执行 push。用户要求持续推进，不要每个阶段结束就停下等待确认。
 
 ## 安全与仓库注意事项
 
