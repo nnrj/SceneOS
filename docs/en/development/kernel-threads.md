@@ -9,7 +9,7 @@ running but do not preempt threads.
 
 ## Scheduling and context
 
-`core/thread.c` manages READY, RUNNING, and EXITED states and selects the next
+`core/thread.c` manages READY, RUNNING, BLOCKED, and EXITED states and selects the next
 READY slot in circular order. Yield succeeds immediately if none is available.
 Scheduling mutations and stack switches run with local interrupts disabled.
 A resumed yield restores its saved IF; a new thread restores the IF captured
@@ -52,9 +52,37 @@ or be reaped, so a runnable return context always exists.
 The paging layer still retains empty intermediate tables. First use may consume
 table pages; subsequent create/reap cycles must stop reducing the physical free
 count. Stack data pages are returned each time. Automatic reaping, blocking
-join, wait queues, sleep, priorities, and forced termination remain future work.
+join, sleep, priorities, and forced termination remain future work.
 The input queue still permits one consumer; threads do not make it or the heap
 SMP-safe.
+
+## Wait queues and input wakeup
+
+Zero-initialize `scene_wait_queue` and retain it and the condition context until
+all waiters finish. Never copy or reset a live queue. Workers call
+`scene_thread_wait(queue, condition, context)`. The condition runs with IF clear
+and must be brief, nonblocking, and must not enable interrupts. Checking it and
+linking the waiter share one interrupt-disabled interval, preventing an IRQ
+from being lost between those operations. An already satisfied condition
+returns immediately; otherwise the thread becomes BLOCKED and switches out.
+
+`wake_one` unblocks the FIFO head; `wake_all` unblocks all current waiters. Both
+may run in ordinary or maskable IRQ context, preserve IF, and mark READY without
+switching stacks in the handler. Execution still follows scheduler slot order;
+batch wakeup does not promise execution order. A resumed waiter rechecks its
+condition and rejoins the tail if false. Notification does not imply resource
+availability. Update the condition before waking; state also modified by IRQs
+needs the same interrupt exclusion. NMI and SMP use are outside the contract.
+
+Bootstrap cannot block and must keep yielding, leaving a runnable context even
+when all workers wait. Timeouts, cancellation, sleep, and a dedicated idle
+thread are not provided; normal boot still creates no background consumer.
+`scene_input_wait(event)` is an optional blocking API for the sole input
+consumer. Its condition pops with IF clear, immediately consuming queued data
+or waiting until a successful IRQ1/IRQ12 enqueue wakes it. Nonblocking pop,
+decoders, raw event format, and capacity remain unchanged. Text translation
+stays in the consumer after wait returns, outside IRQs. This is not event
+fan-out to multiple consumers.
 
 ## Validation
 
@@ -65,6 +93,9 @@ python tools/scenectl.py smoke --threads --tsc-clock --timeout 15
 python tools/scenectl.py smoke --preset release --threads --timeout 15
 python tools/scenectl.py smoke --thread-guard --timeout 15
 python tools/scenectl.py smoke --preset release --thread-guard --timeout 15
+python tools/scenectl.py smoke --thread-wait --timeout 15
+python tools/scenectl.py smoke --thread-wait --pic --timeout 15
+python tools/scenectl.py smoke --preset release --thread-wait --timeout 15
 ```
 
 The thread test runs three rounds of eight workers. It checks circular order,
@@ -79,10 +110,18 @@ only for focused builds.
 `--thread-guard` writes the lower guard from a real worker, requiring vector 14,
 CR2 `0xffffc10000000000`, and a supervisor write to a non-present page. This case
 has no `Bootstrap complete` marker and does not validate every stack-overflow
-or double-fault path. Normal smoke rejects unexpected exceptions. The two
+or double-fault path. Normal smoke rejects unexpected exceptions. All
 focused modes are mutually exclusive and disabled in ordinary builds.
 
-Next add waiting/wakeup and explicit non-preemptible regions before integrating
+`--thread-wait` checks FIFO order, spurious wake rechecks, an already satisfied
+condition, wake-all, IF preservation, invalid queues, and bootstrap rejection.
+A real input worker then consumes one buffered synthetic event. Bootstrap
+emits each Monitor injection marker only after observing the worker BLOCKED.
+Five hardware groups cover key press/release, motion, scrolling, and buttons,
+for seven ordered events including the buffered one, with no loss. Bootstrap
+never wakes that consumer directly; delivery must pass through input IRQs.
+
+Next add wait timeouts/cancellation, an idle loop, and explicit non-preemptible regions before integrating
 timer preemption. Ring 3 also needs full interrupt-state handling, TSS RSP0
 switching, address spaces, and system calls. This stage supplies software stack
-switching only.
+switching and wait/wakeup foundations.

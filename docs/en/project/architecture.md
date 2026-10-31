@@ -112,11 +112,14 @@ clear. Five buttons, horizontal scrolling, absolute input, and multi-consumer
 routing remain unsupported.
 
 The first M3 stage supplies cooperative BSP threads sharing the kernel address
-space: one permanent boot context and eight workers, READY/RUNNING/EXITED
+space: one permanent boot context and eight workers, READY/RUNNING/BLOCKED/EXITED
 states, explicit round-robin yield, and reaping after exit. Each worker maps
 a 32 KiB NX stack between unmapped guard pages in a region starting at
 `0xffffc10000000000`. Core scheduling uses an architecture continuation
 interface with interrupts disabled during state changes and switches; the
-resumed thread restores interrupts. Normal boot has no background workers,
-and PIT does not preempt. Waiting/wakeup, private address spaces, FPU/SIMD,
-TLS, SMP, and Ring 3 remain future work.
+resumed thread restores interrupts. Wait queues check conditions and enqueue
+under one interrupt-disabled interval, with FIFO single/batch wakeup and
+condition rechecks. Input IRQs mark blocked consumers READY; ordinary context
+later yields to them while bootstrap stays runnable. Normal boot has no
+background workers and PIT does not preempt. Wait timeouts/cancellation, an
+idle loop, private address spaces, FPU/SIMD, TLS, SMP, and Ring 3 remain future work.

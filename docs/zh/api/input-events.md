@@ -8,6 +8,9 @@
 - `scene_input_push_pointer(event)`：加入相对移动、滚轮或按键变化；空指针、无变化事件
   或队列溢出时返回 false。
 - `scene_input_pop(event)`：移除最早事件；队列为空或目标为空时返回 false。
+- `scene_input_wait(event)`：单一消费者的阻塞替代接口，只能在已初始化、IF 开启
+  的工作线程中调用；原子尝试 pop 或等待输入 IRQ 唤醒。无效上下文/空目标返回
+  false 且不修改输出，成功返回一个原始事件；无超时、取消或多消费者分发。
 - `scene_input_pending()`：返回当前积压事件数。
 - `scene_input_dropped()`：返回初始化以来因溢出丢弃的累计数量。
 

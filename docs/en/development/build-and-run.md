@@ -141,6 +141,13 @@ Both modes are mutually exclusive with other focused tests and support `--pic`,
 `SCENEOS_THREAD_GUARD_SELF_TEST` default to OFF; normal boot initializes only
 the boot thread. See [cooperative kernel threads](kernel-threads.md).
 
+`python tools/scenectl.py smoke --thread-wait --timeout 15` checks wait queues
+and a blocking input consumer. Keyboard, motion, wheel, and button injections
+start only after the worker is BLOCKED; IRQ wakeup must deliver seven events,
+including one pre-buffered synthetic event. PIC/TSC/Release are supported, and
+the mode excludes other focused tests. `SCENEOS_THREAD_WAIT_SELF_TEST` defaults
+to OFF. This does not enable preemptive scheduling.
+
 `python tools/scenectl.py smoke --clock-check --timeout 10` validates CPUID
 frequency decoding and diagnostic boundary cases. Add `--tsc-clock` to test
 the TSC fallback with these checks. Actual CPU diagnostics and synthetic edge

@@ -117,6 +117,11 @@ if(SCENEOS_THREAD_GUARD_SELF_TEST)
     target_compile_definitions(scene-kernel PRIVATE SCENEOS_THREAD_GUARD_SELF_TEST=1)
 endif()
 
+if(SCENEOS_THREAD_WAIT_SELF_TEST)
+    target_compile_definitions(scene-kernel PRIVATE SCENEOS_THREAD_WAIT_SELF_TEST=1)
+    target_sources(scene-kernel PRIVATE src/tests/thread_wait.c)
+endif()
+
 target_compile_options(scene-kernel PRIVATE
     $<$<COMPILE_LANGUAGE:C>:-ffreestanding>
     $<$<COMPILE_LANGUAGE:C>:-fno-builtin>

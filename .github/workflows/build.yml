@@ -110,6 +110,18 @@ jobs:
       - name: Validate worker stack guard page in Release
         run: python3 tools/scenectl.py smoke --preset release --thread-guard --timeout 15
 
+      - name: Validate wait queues and input IRQ wakeup
+        run: python3 tools/scenectl.py smoke --thread-wait --timeout 15
+
+      - name: Validate input thread wakeup through legacy PIC
+        run: python3 tools/scenectl.py smoke --thread-wait --pic --timeout 15
+
+      - name: Validate input thread wakeup with TSC
+        run: python3 tools/scenectl.py smoke --thread-wait --tsc-clock --timeout 15
+
+      - name: Validate input thread wakeup in Release
+        run: python3 tools/scenectl.py smoke --preset release --thread-wait --timeout 15
+
       - name: Build ordinary bootable image
         run: python3 tools/scenectl.py image
 

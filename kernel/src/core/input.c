@@ -1,4 +1,5 @@
 #include <scene/input.h>
+#include <scene/thread.h>
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -9,6 +10,7 @@ static volatile size_t read_index;
 static volatile size_t write_index;
 static uint64_t next_sequence;
 static volatile uint64_t dropped_events;
+static struct scene_wait_queue input_waiters;
 
 static bool push_event(const struct scene_input_event *event) {
     const size_t current_write = write_index;
@@ -22,6 +24,7 @@ static bool push_event(const struct scene_input_event *event) {
     event_queue[current_write].sequence = next_sequence;
     ++next_sequence;
     write_index = next_write;
+    (void)scene_wait_queue_wake_one(&input_waiters);
     return true;
 }
 
@@ -67,6 +70,14 @@ bool scene_input_pop(struct scene_input_event *event) {
     *event = event_queue[current_read];
     read_index = (current_read + 1U) % SCENE_INPUT_QUEUE_CAPACITY;
     return true;
+}
+
+static bool input_available(void *context) {
+    return scene_input_pop(context);
+}
+
+bool scene_input_wait(struct scene_input_event *event) {
+    return event != 0 && scene_thread_wait(&input_waiters, input_available, event);
 }
 
 size_t scene_input_pending(void) {

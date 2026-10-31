@@ -327,6 +327,7 @@ def command_configure(arguments: argparse.Namespace) -> None:
     force_basic_mouse = "ON" if getattr(arguments, "mouse_basic", False) else "OFF"
     thread_test = "ON" if getattr(arguments, "threads", False) else "OFF"
     thread_guard_test = "ON" if getattr(arguments, "thread_guard", False) else "OFF"
+    thread_wait_test = "ON" if getattr(arguments, "thread_wait", False) else "OFF"
     force_tsc_clock = (
         "ON" if getattr(arguments, "tsc_clock", False) else "OFF"
     )
@@ -352,6 +353,7 @@ def command_configure(arguments: argparse.Namespace) -> None:
             f"-DSCENEOS_FORCE_BASIC_MOUSE={force_basic_mouse}",
             f"-DSCENEOS_THREAD_SELF_TEST={thread_test}",
             f"-DSCENEOS_THREAD_GUARD_SELF_TEST={thread_guard_test}",
+            f"-DSCENEOS_THREAD_WAIT_SELF_TEST={thread_wait_test}",
             f"-DSCENEOS_FORCE_TSC_CLOCK={force_tsc_clock}",
             f"-DSCENEOS_CLOCK_SELF_TEST={clock_test}",
             f"-DSCENEOS_LOCAL_TIMER_SELF_TEST={local_timer_test}",
@@ -604,6 +606,7 @@ def command_smoke(arguments: argparse.Namespace) -> None:
     interactive_input_test = (
         arguments.keyboard or arguments.mouse or arguments.text_input
         or arguments.mouse_wheel or arguments.mouse_basic
+        or arguments.thread_wait
     )
     if interactive_input_test:
         command.extend(["-monitor", "stdio"])
@@ -629,6 +632,15 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             injections = tuple(
                 (f"Waiting for text input step: {index}", f"sendkey {key} 30\n")
                 for index, key in enumerate(keys)
+            )
+        elif arguments.thread_wait:
+            commands = (
+                "sendkey a 30", "mouse_move 12 -7", "mouse_move 0 0 1",
+                "mouse_button 1", "mouse_button 0",
+            )
+            injections = tuple(
+                (f"Waiting for thread input step: {index}", f"{command}\n")
+                for index, command in enumerate(commands)
             )
         elif arguments.mouse_wheel or arguments.mouse_basic:
             commands = (
@@ -828,6 +840,16 @@ def command_smoke(arguments: argparse.Namespace) -> None:
             "Thread workers completed: 24",
             "Cooperative kernel threads: verified",
         )
+    if arguments.thread_wait:
+        expected += (
+            "Wait queue FIFO and predicate recheck: verified",
+            "Wait queue atomic condition and IRQ-safe wake: verified",
+            "Input worker blocked before IRQ injection: verified",
+            "Blocking input events consumed: 7",
+            "Input events dropped: 0",
+            "IRQ-to-thread input wakeups: verified",
+            "Thread wait and input wakeup: verified",
+        )
     if arguments.text_input:
         expected += (
             "Text layout edge cases: verified",
@@ -956,6 +978,11 @@ def parser() -> argparse.ArgumentParser:
     smoke.add_argument("--preset", choices=("dev", "release"), default="dev")
     smoke.add_argument("--timeout", type=int, default=10)
     fault_tests = smoke.add_mutually_exclusive_group()
+    fault_tests.add_argument(
+        "--thread-wait",
+        action="store_true",
+        help="validate wait queues and wake a blocked input worker through PS/2 IRQs",
+    )
     fault_tests.add_argument(
         "--threads",
         action="store_true",

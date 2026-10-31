@@ -7,7 +7,7 @@ M3 首阶段提供 BSP 上的协作式线程。启动上下文成为常驻线程
 
 ## 调度与上下文
 
-`core/thread.c` 管理 READY、RUNNING、EXITED 状态，按槽位循环挑选下一个 READY
+`core/thread.c` 管理 READY、RUNNING、BLOCKED、EXITED 状态，按槽位循环挑选下一个 READY
 线程。yield 没有候选者时直接成功返回。调度状态修改及切栈期间关闭本地中断；
 恢复旧线程时恢复该次 yield 保存的 IF，新线程先恢复创建时的 IF，再调用入口。
 创建、yield、退出及回收要求普通线程上下文且 IF 开启，拒绝从可屏蔽 IRQ 或已
@@ -38,8 +38,29 @@ RBP、R12–R15 与栈上的返回地址；调用者保存寄存器依照编译�
 
 当前分页层仍保留空中间页表：首次使用栈区域可能消耗中间表页，后续反复创建/
 回收应保持物理页数量不再减少。这与每次正确归还栈数据页并不冲突。没有自动
-回收器、阻塞 join、等待队列、sleep、优先级或强制终止；这些属于后续调度工作。
+回收器、阻塞 join、sleep、优先级或强制终止；这些属于后续调度工作。
 输入队列仍只允许一个消费者，创建线程不意味着队列或堆已经成为 SMP 安全接口。
+
+## 等待队列与输入唤醒
+
+`scene_wait_queue` 必须零初始化，队列与条件上下文在所有等待者完成前保持有效，
+不能复制或重置活动队列。工作线程通过 `scene_thread_wait(queue, condition,
+context)` 等待；条件回调在 IF 关闭时运行，必须简短、不阻塞且不能开启中断。
+检查条件和链接到队列在同一关中断区间内完成，因此不会在两者之间漏接设备 IRQ。
+条件已满足时立即返回；否则转为 BLOCKED，保存 continuation 并让出 CPU。
+
+`wake_one` 按等待队列 FIFO 解除一个等待，`wake_all` 解除当前所有等待；两者都
+可由普通上下文或可屏蔽 IRQ 调用，保留 IF，只标记 READY，不在中断中切栈。
+实际执行仍按调度器槽位轮转，不承诺批量唤醒后的执行顺序。醒来后重新检查条件，
+若仍不满足就回到队尾；唤醒通知不代表资源一定可用。调用方先更新条件再唤醒，
+若条件状态也会由 IRQ 修改，应使用相同的关中断保护。NMI 与 SMP 不在契约内。
+
+启动线程禁止阻塞，负责继续 yield，因而所有工作线程都等待时仍有可运行上下文。
+当前没有超时、取消、睡眠或独立 idle 线程，普通启动仍不创建后台消费者。
+`scene_input_wait(event)` 是单一输入消费者可选择的阻塞接口：条件回调在关中断
+时尝试 pop，已有事件立即取得；否则 IRQ1/IRQ12 成功入队后唤醒消费者。原有
+非阻塞 pop、设备解码、原始事件结构和容量不变。文本转换在等待返回后由消费者
+按需调用，不进入 IRQ。该接口不会自动提供多消费者扇出。
 
 ## 验证
 
@@ -50,6 +71,9 @@ python tools/scenectl.py smoke --threads --tsc-clock --timeout 15
 python tools/scenectl.py smoke --preset release --threads --timeout 15
 python tools/scenectl.py smoke --thread-guard --timeout 15
 python tools/scenectl.py smoke --preset release --thread-guard --timeout 15
+python tools/scenectl.py smoke --thread-wait --timeout 15
+python tools/scenectl.py smoke --thread-wait --pic --timeout 15
+python tools/scenectl.py smoke --preset release --thread-wait --timeout 15
 ```
 
 线程自测分三轮运行，每轮填满 8 个工作槽位。它检查固定轮转顺序、每线程不同
@@ -61,7 +85,13 @@ python tools/scenectl.py smoke --preset release --thread-guard --timeout 15
 `--thread-guard` 在真实工作线程中写入下保护页，要求向量 14、CR2 为
 `0xffffc10000000000`，且原因是 supervisor 对 non-present 页的写入。该用例
 不会出现 `Bootstrap complete`，不能等同于所有栈溢出或双重故障路径都已验证。
-普通 smoke 会拒绝意外异常。两个专项选项互斥，普通构建均关闭。
+普通 smoke 会拒绝意外异常。各专项选项互斥，普通构建均关闭。
 
-后续先补等待/唤醒与明确的不可抢占区，再接入时钟抢占；进入 Ring 3 时还必须
-增加完整中断现场、TSS RSP0 切换、地址空间和系统调用。当前仅完成软件切栈基础。
+`--thread-wait` 先验证 FIFO、伪唤醒重检、预先满足条件、wake-all、IF 保持、无效
+队列和禁止阻塞启动线程，再运行真实输入消费者。先放入一个合成事件验证已有
+数据的立即取得，再由启动线程确认消费者 BLOCKED 后才输出 Monitor 注入标记。
+键盘按下/释放、鼠标移动、滚轮和按钮共五组硬件注入，最终加上缓冲事件共消费
+7 个有序事件且零丢失。启动线程不手动唤醒消费者，交付必须经输入 IRQ。
+
+后续补等待超时/取消、空闲循环与明确的不可抢占区，再接入时钟抢占；进入 Ring 3 时还必须
+增加完整中断现场、TSS RSP0 切换、地址空间和系统调用。当前完成软件切栈与等待唤醒基础。

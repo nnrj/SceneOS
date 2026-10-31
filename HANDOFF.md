@@ -16,15 +16,16 @@
    git log -5 --oneline
    ```
 
-3. 预期分支为 `master`，本次线程开发的基准提交为（最新 HEAD 以 Git 为准）：
+3. 预期分支为 `master`，本次等待/唤醒开发的基准提交为（最新 HEAD 以 Git 为准）：
 
    ```text
-   5fa99c6 feat: add IntelliMouse wheel negotiation and correct PS/2 motion
+   b45b86f feat: add cooperative BSP threads with guarded kernel stacks
    ```
 
    用户已推送此前的迁移恢复、时钟诊断和 Git 忽略规则改动（`f094ef3`）。
    Local APIC timer 与 PIC/PIT 修复为 `7e3c674`，文本输入为 `777c1bd`，
-   滚轮为 `5fa99c6`；线程开发的实现、验证见下文。用户已授权完成验证后执行 `git add .` 和 `git commit`
+   滚轮为 `5fa99c6`，协作线程为 `b45b86f`；等待/唤醒实现、验证见下文。
+   用户已授权完成验证后执行 `git add .` 和 `git commit`
    保存阶段性成果，不推送远端。提交与工作树状态以实际 Git 为准。
 
 4. 先阅读本文以及：
@@ -117,14 +118,18 @@
   保持 SysV 栈对齐，调度临界区与切栈期间关闭中断。
 - 每工作线程 32 KiB 清零/NX 栈，前后未映射保护页；固定栈区从
   `0xffffc10000000000` 起，共 320 KiB 虚拟范围。
-- READY/RUNNING/EXITED、主动轮转、自然返回或显式退出、其他线程显式回收，
+- READY/RUNNING/BLOCKED/EXITED、主动轮转、自然返回或显式退出、其他线程显式回收，
   容量限制、单调 ID 与旧 ID 拒绝；部分栈创建失败回滚及物理页归还。
-- 普通启动仅登记启动线程，不创建后台任务。无时钟抢占、wait/sleep/join、
+- 零初始化等待队列、关中断条件检查/入队、FIFO 单个与批量唤醒、醒后条件重检；
+  启动线程保持可运行。`scene_input_wait()` 支持单一工作线程阻塞消费输入，
+  由 IRQ1/IRQ12 的成功入队标记 READY，不在 IRQ 中调度。
+- 普通启动仅登记启动线程，不创建后台任务。无时钟抢占、sleep/join、等待超时/取消、
   FPU/SIMD/TLS、SMP 或用户态；输入队列仍是单消费者。空中间页表尚不回收。
 
 ## 最近关键提交
 
 ```text
+b45b86f feat: add cooperative BSP threads with guarded kernel stacks
 5fa99c6 feat: add IntelliMouse wheel negotiation and correct PS/2 motion
 777c1bd feat: add US keyboard text translation and UTF-8
 7e3c674 feat: add BSP local timer and harden PIT/PIC paths
@@ -337,13 +342,50 @@ python tools/scenectl.py smoke --mouse --timeout 10
 - CI、中英文架构/路线图/开发/API 与目录索引同步。普通 Dev/Release 的
   13 个自测/强制模式开关已确认全 OFF。Python 语法、参数组合/互斥、双语文档
   结构与链接、`git diff --check` 通过。未运行远端 CI、ISO 或真机。
+- 本阶段已提交为 `b45b86f`，未推送；随后直接推进等待/唤醒与输入线程。
+
+### 2026-10-31 等待队列与 IRQ 输入唤醒
+
+- 为线程增加 BLOCKED 状态与内嵌等待节点。`scene_thread_wait()` 只允许工作
+  线程，在同一关中断区间检查条件、入队并切换；已满足条件直接返回。唤醒后
+  重新检查条件，仍不满足则回到队尾，避免把通知误作资源可用。
+- `wake_one` FIFO 解除一个等待，`wake_all` 解除全部当前等待；保留 IF，可在
+  可屏蔽 IRQ 调用，只标记 READY，不从 IRQ 切栈。队列必须 `{0}` 初始化，
+  条件回调简短且不得开启中断；队列与上下文要存活到所有等待调用完成。
+- 输入增加阻塞消费者 API，原有队列格式、容量、非阻塞 pop 和文本转换不变。
+  成功入队唤醒等待者，满队列或无效事件不发通知；仍要求单消费者。
+- `smoke --thread-wait` 先验证 FIFO、伪唤醒重检、预先满足条件、批量唤醒、IF
+  保持、无效队列和启动线程不可阻塞。随后消费预缓冲事件，并在消费者确实
+  BLOCKED 后才发五组 QEMU 注入：A 按下/释放、移动、滚轮、左键按下/释放。
+  共消费七个有序事件（一个合成 + 六个设备事件），零丢失；启动线程不手动唤醒。
+- 15 组最终回归全部通过，均为 15 秒上限，日志位于
+  `build/verify/thread-wait-20261031/final/`：
+
+  | 配置 | 路径 | 组数 |
+  | --- | --- | --- |
+  | Dev | `--thread-wait`，分别使用 APIC、PIC、TSC | 3 |
+  | Release | `--thread-wait`，分别使用 APIC、PIC | 2 |
+  | Dev / Release | `--threads`（Dev 另加 PIC） | 3 |
+  | Dev | `--thread-guard` | 1 |
+  | Dev | `--text-input`，分别使用 APIC、PIC | 2 |
+  | Dev | `--mouse-wheel`、`--mouse-basic --pic` | 2 |
+  | Dev / Release | 普通 `smoke` | 2 |
+
+- 临时移除输入生产端 wake 后，消费者按预期停在第一个硬件输入步骤并明确失败；
+  脚本 finally 恢复原字节，等待专项与普通 Dev 启动重新通过。证据位于父目录
+  `missing-wakeup-negative-*`、`restore-*`。
+- CI 与双语项目/开发/API 同步，新增开关默认 OFF；普通 Dev/Release 配置的
+  14 个自测/强制开关全部 OFF。Python 语法、参数组合/互斥、文档结构/链接和
+  `git diff --check` 通过。澄清 PS/2 轮询只支持启动期，IF 检查并非运行期事务管理。
+- 尚无等待超时、取消、独立 idle 线程、抢占、SMP 或用户态；普通启动不会自动
+  提供终端或可见交互。远端 CI、ISO 与真机本轮未运行。
 
 ## 建议下一步
 
 继续进入 M3 的内核线程基础，不要过早进入完整桌面：
 
-1. 在已验证的协作式切栈基础上增加等待队列、条件检查/入队的原子性和唤醒，
-   明确启动/空闲上下文角色及不可抢占区后，再接入时钟抢占与用户态。
+1. 在已验证的协作式切栈与等待队列基础上增加超时/取消，明确启动/空闲上下文
+   角色及不可抢占区后，再接入时钟抢占与用户态。
 2. 正式窗口系统仍按路线图置于用户态；当前不插入内核期可见光标原型。
 3. 文本消费者/终端形成时，再按交互需要选择布局、焦点和编辑动作策略；不把
    输入法、组合文本或布局规则放入 PS/2 驱动。

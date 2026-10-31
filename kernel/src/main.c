@@ -34,6 +34,9 @@
 #if defined(SCENEOS_THREAD_SELF_TEST) || defined(SCENEOS_THREAD_GUARD_SELF_TEST)
 #include "tests/thread.h"
 #endif
+#if defined(SCENEOS_THREAD_WAIT_SELF_TEST)
+#include "tests/thread_wait.h"
+#endif
 
 static uint32_t timer_callback_results[2];
 static size_t timer_callback_count;
@@ -523,6 +526,12 @@ void kmain(void) {
 #endif
 #if defined(SCENEOS_THREAD_GUARD_SELF_TEST)
     scene_thread_guard_self_test();
+#endif
+#if defined(SCENEOS_THREAD_WAIT_SELF_TEST)
+    if (!scene_thread_wait_self_test()) {
+        scene_panic("Thread wait/input self-test failed");
+    }
+    scene_log_line("Thread wait and input wakeup: verified");
 #endif
 
     scene_log_line("Bootstrap complete. Halting the bootstrap processor.");

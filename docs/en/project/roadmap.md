@@ -63,8 +63,10 @@ observable completion criteria.
 - Cooperative BSP threads, software context switching, guarded stacks, exit,
   explicit reaping, and register/stack/lifecycle/guard-page QEMU acceptance.
   (initial version complete)
-- Waiting/wakeup, non-preemptible regions, timer preemption, priorities, and
-  dynamic thread capacity.
+- Atomic condition check/enqueue, FIFO single/batch wakeup, blocking input
+  consumers, and real IRQ wakeup. (initial version complete)
+- Wait timeouts/cancellation, an idle loop, non-preemptible regions, timer
+  preemption, priorities, and dynamic thread capacity.
 - Ring 3, per-process address spaces, system calls, and IPC.
 - ELF64 user programs, initramfs, and a small libc.
 

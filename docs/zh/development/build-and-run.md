@@ -131,6 +131,11 @@ QEMU 串口应输出 `SceneOS kernel bootstrap`、GDT/TSS/IDT、bootloader、内
 `SCENEOS_THREAD_GUARD_SELF_TEST` 默认 OFF；普通启动只初始化启动线程。
 说明与限制见[协作式内核线程](kernel-threads.md)。
 
+`python tools/scenectl.py smoke --thread-wait --timeout 15` 检查等待队列和阻塞
+输入消费者。脚本只在消费者 BLOCKED 后注入键盘、鼠标、滚轮和按键，要求通过
+IRQ 唤醒并消费七个事件（含一个预先缓冲的合成事件）。支持 PIC/TSC/Release，
+与其他专项互斥；`SCENEOS_THREAD_WAIT_SELF_TEST` 默认 OFF。它不启用抢占调度。
+
 `python tools/scenectl.py smoke --clock-check --timeout 10` 验证 CPUID 频率
 解析和诊断边界；追加 `--tsc-clock` 可验证 TSC 回退与自测共存。日志中的真实
 CPU 诊断与人工输入的边界用例分开报告，详见[中断与时间](interrupts-and-time.md)。

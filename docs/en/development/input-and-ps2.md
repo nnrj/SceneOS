@@ -3,8 +3,8 @@
 The input core separates device bytes from consumers. `input.c` owns a
 64-slot circular queue of `scene_input_event` values. Keyboard IRQ1 and mouse
 IRQ12 run as one serialized interrupt-producer context on the BSP; bootstrap
-kernel code is the consumer. One slot is reserved to distinguish full from
-empty, so at most 63 events are pending. Overflow drops the new event and
+code or a dedicated worker is the sole consumer. One slot is reserved to
+distinguish full from empty, so at most 63 events are pending. Overflow drops the new event and
 increments a visible counter.
 
 This first implementation assumes non-nested maskable interrupt handlers, one
@@ -42,8 +42,9 @@ still lacks Pause/Print Screen sequences, LEDs, hot-plug recovery, and multiple
 keyboards.
 
 The shared controller enables both i8042 ports and verifies response origin.
-Command/data polling is limited to boot initialization with IF clear; runtime
-calls fail instead of racing IRQ readers. Boot polling still discards stale
+Command/data polling is limited to boot initialization with IF clear; calls
+with IF set fail instead of racing IRQ readers. Manually clearing IF does not
+make this a supported runtime transaction API. Boot polling still discards stale
 output from the other port; concurrent transactions and hot-plug recovery are
 not provided.
 
@@ -122,3 +123,10 @@ raw events; the test consumes them and calls the translator. Missing markers,
 kernel faults, early process exit, or timeout fail the test and clean up its
 QEMU process. Normal builds do not enable this test and still offer no visible
 text-box or terminal input feedback.
+
+A worker may instead consume through `scene_input_wait()`. Its wait queue
+atomically checks for data or blocks; successful input IRQ enqueue marks the
+waiter READY without switching in the handler. Nonblocking pop and the single
+consumer restriction remain. `smoke --thread-wait --timeout 15` verifies a
+BLOCKED worker waking through keyboard/mouse IRQs; see
+[cooperative kernel threads](kernel-threads.md).

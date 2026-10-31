@@ -10,6 +10,10 @@ The current kernel-private API is declared in `scene/input.h`.
   It returns false for null, no-op, or overflowing events.
 - `scene_input_pop(event)` removes the oldest event and returns false when the
   queue is empty or the destination is null.
+- `scene_input_wait(event)` is the blocking alternative for the sole consumer,
+  usable only in an initialized worker with IF set. It atomically pops or waits
+  for an input IRQ wake. Invalid context/null output return false unchanged;
+  success returns one raw event. No timeout, cancellation, or fan-out is provided.
 - `scene_input_pending()` returns the current queued count.
 - `scene_input_dropped()` returns the cumulative overflow count since init.
 

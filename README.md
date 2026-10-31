@@ -19,7 +19,8 @@ IRQ12 with IntelliMouse wheel negotiation and three-byte fallback, translates
 semantic keys through a minimal US layout into Unicode text
 with UTF-8 encoding, and draws a simple framebuffer scene. Initial cooperative
 BSP threads add guarded kernel stacks, context switching, exit, and explicit
-reaping; normal boot initializes only the bootstrap thread.
+reaping. Wait queues support IRQ-driven blocking input; normal boot initializes
+only the bootstrap thread.
 
 ## Quick start
 

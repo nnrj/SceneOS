@@ -19,5 +19,6 @@ option(SCENEOS_MOUSE_PROTOCOL_SELF_TEST "Validate PS/2 packets, buttons and whee
 option(SCENEOS_FORCE_BASIC_MOUSE "Skip wheel probing and require a three-byte mouse" OFF)
 option(SCENEOS_THREAD_SELF_TEST "Validate cooperative kernel threads and stack lifecycle" OFF)
 option(SCENEOS_THREAD_GUARD_SELF_TEST "Trigger a worker stack guard page fault" OFF)
+option(SCENEOS_THREAD_WAIT_SELF_TEST "Validate wait queues and IRQ-to-thread input wakeup" OFF)
 
 add_subdirectory(kernel)

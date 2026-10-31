@@ -139,6 +139,8 @@ void scene_input_init(void);
 bool scene_input_push_key(const struct scene_key_event *event);
 bool scene_input_push_pointer(const struct scene_pointer_event *event);
 bool scene_input_pop(struct scene_input_event *event);
+/* Blocking alternative for the sole consumer, in an initialized worker thread. */
+bool scene_input_wait(struct scene_input_event *event);
 size_t scene_input_pending(void);
 uint64_t scene_input_dropped(void);
 
